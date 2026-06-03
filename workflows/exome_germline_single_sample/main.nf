@@ -1,0 +1,144 @@
+#!/usr/bin/env nextflow
+
+include { SUBSET_CONTAMINATION_RESOURCES } from '../../modules/bedtools'
+include { UNMAPPED_BAM_TO_ALIGNED_BAM } from '../../subworkflows/unmapped_bam_to_aligned_bam'
+
+workflow {
+    
+    main:
+    intervals_ch = channel.fromPath(params.target_interval_list)
+
+    ref_fasta_file = file(params.ref_fasta)
+    ref_fasta_index_file = file(params.ref_fasta_index)
+    ref_dict_file = file(params.ref_dict)
+
+    ref_alt_file = file(params.ref_alt)
+    ref_amb_file = file(params.ref_amb)
+    ref_ann_file = file(params.ref_ann)
+    ref_bwt_file = file(params.ref_bwt)
+    ref_pac_file = file(params.ref_pac)
+    ref_sa_file = file(params.ref_sa)
+
+    reference_bin_file = file(params.reference_bin)
+    hash_table_cfg_bin_file = file(params.hash_table_cfg_bin)
+    hash_table_cmp_file = file(params.hash_table_cmp)
+
+    dbsnp_vcf_file = file(params.dbsnp_vcf)
+    dbsnp_vcf_index_file = file(params.dbsnp_vcf_index)
+    known_indels_sites_vcf_files = channel.fromPath(params.known_indels_sites_vcfs).collect()
+    known_indels_sites_vcf_index_files = channel.fromPath(params.known_indels_sites_indices).collect()
+
+    contamination_sites_ud_file = file(params.contamination_sites_ud)
+    contamination_sites_bed_file = file(params.contamination_sites_bed)
+    contamination_sites_mu_file = file(params.contamination_sites_mu)
+    haplotype_database_file = file(params.haplotype_database)
+
+    subset_contamination_sites_ch = SUBSET_CONTAMINATION_RESOURCES(
+        intervals_ch,
+        contamination_sites_ud_file,
+        contamination_sites_bed_file,
+        contamination_sites_mu_file,
+    )
+
+    unmapped_bams_ch = channel.fromPath(params.unmapped_bams).map { ubam -> [ubam.baseName, ubam] }
+
+    mapping_workflow_ch = UNMAPPED_BAM_TO_ALIGNED_BAM(
+        params.sample_name,
+        unmapped_bams_ch,
+        ref_fasta_file,
+        ref_fasta_index_file,
+        ref_dict_file,
+        ref_alt_file,
+        ref_amb_file,
+        ref_ann_file,
+        ref_bwt_file,
+        ref_pac_file,
+        ref_sa_file,
+        reference_bin_file,
+        hash_table_cfg_bin_file,
+        hash_table_cmp_file,
+        dbsnp_vcf_file,
+        dbsnp_vcf_index_file,
+        known_indels_sites_vcf_files,
+        known_indels_sites_vcf_index_files,
+        subset_contamination_sites_ch.subset_ud,
+        subset_contamination_sites_ch.subset_bed,
+        subset_contamination_sites_ch.subset_mu,
+        haplotype_database_file,
+        params.use_bwa_mem,
+    )
+
+    publish:
+    quality_yield_metrics = mapping_workflow_ch.quality_yield_metrics
+
+    unsorted_read_group_base_distribution_by_cycle_pdf = mapping_workflow_ch.unsorted_read_group_base_distribution_by_cycle_pdf
+    unsorted_read_group_base_distribution_by_cycle_metrics = mapping_workflow_ch.unsorted_read_group_base_distribution_by_cycle_metrics
+    unsorted_read_group_insert_size_histogram_pdf = mapping_workflow_ch.unsorted_read_group_insert_size_histogram_pdf
+    unsorted_read_group_insert_size_metrics = mapping_workflow_ch.unsorted_read_group_insert_size_metrics
+    unsorted_read_group_quality_by_cycle_pdf = mapping_workflow_ch.unsorted_read_group_quality_by_cycle_pdf
+    unsorted_read_group_quality_by_cycle_metrics = mapping_workflow_ch.unsorted_read_group_quality_by_cycle_metrics
+    unsorted_read_group_quality_distribution_pdf = mapping_workflow_ch.unsorted_read_group_quality_distribution_pdf
+    unsorted_read_group_quality_distribution_metrics = mapping_workflow_ch.unsorted_read_group_quality_distribution_metrics
+
+    cross_check_fingerprints_metrics = mapping_workflow_ch.cross_check_fingerprints_metrics
+
+    per_sample_stats = mapping_workflow_ch.per_sample_stats
+    contamination = mapping_workflow_ch.contamination
+
+    duplicate_metrics = mapping_workflow_ch.duplicate_metrics
+    bqsr_report = mapping_workflow_ch.bqsr_report
+
+    final_bam = mapping_workflow_ch.final_bam
+    final_bam_index = mapping_workflow_ch.final_bam_index
+}
+
+output {
+    quality_yield_metrics {
+        path 'quality_control'
+    }
+    unsorted_read_group_base_distribution_by_cycle_pdf {
+        path 'quality_control'
+    }
+    unsorted_read_group_base_distribution_by_cycle_metrics {
+        path 'quality_control'
+    }
+    unsorted_read_group_insert_size_histogram_pdf {
+        path 'quality_control'
+    }
+    unsorted_read_group_insert_size_metrics {
+        path 'quality_control'
+    }
+    unsorted_read_group_quality_by_cycle_pdf {
+        path 'quality_control'
+    }
+    unsorted_read_group_quality_by_cycle_metrics {
+        path 'quality_control'
+    }
+    unsorted_read_group_quality_distribution_pdf {
+        path 'quality_control'
+    }
+    unsorted_read_group_quality_distribution_metrics {
+        path 'quality_control'
+    }
+    cross_check_fingerprints_metrics {
+        path 'quality_control'
+    }
+    per_sample_stats {
+        path 'quality_control'
+    }
+    contamination {
+        path 'quality_control'
+    }
+    duplicate_metrics {
+        path 'duplicates'
+    }
+    bqsr_report {
+        path 'recalibration'
+    }
+    final_bam {
+        path 'alignment'
+    }
+    final_bam_index {
+        path 'alignment'
+    }
+}
