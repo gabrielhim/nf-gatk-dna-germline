@@ -1,0 +1,21 @@
+# Packages
+*.gz
+*.jar
+*.tar
+*.zip
+
+# Logs and databases
+*.log
+*.log.*
+
+# System files
+.DS_Store
+._*
+
+# Nextflow
+.nextflow*
+results
+work
+data
+training
+results_gatk
