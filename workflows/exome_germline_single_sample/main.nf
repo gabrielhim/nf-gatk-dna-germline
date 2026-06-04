@@ -40,7 +40,7 @@ workflow {
         contamination_sites_mu_file,
     )
 
-    unmapped_bams_ch = channel.fromPath(params.unmapped_bams).map { ubam -> [ubam.baseName, ubam] }
+    unmapped_bams_ch = channel.fromPath(params.unmapped_bams).map { ubam -> [ubam, ubam.baseName] }
 
     mapping_workflow_ch = UNMAPPED_BAM_TO_ALIGNED_BAM(
         params.sample_name,

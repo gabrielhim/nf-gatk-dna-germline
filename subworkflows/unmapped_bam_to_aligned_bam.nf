@@ -102,7 +102,7 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
         mapping_stderr_log_ch = DRAGMAP_AND_MERGE_ALIGNMENT.out.dragmap_stderr_log
     }
 
-    read_group_metrics_input_ch = merged_bam_ch.map { bam -> [ "${bam.baseName}.read_group", bam] }
+    read_group_metrics_input_ch = merged_bam_ch.map { bam -> [ bam, "${bam.baseName}.read_group"] }
     COLLECT_UNSORTED_READ_GROUP_BAM_METRICS(read_group_metrics_input_ch)
 
     MARK_DUPLICATES(merged_bam_ch.collect(), false, false, compression_level, sample_name)
