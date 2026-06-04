@@ -7,7 +7,6 @@ include { CHECK_CONTAMINATION } from '../modules/verify_bam_id'
 include { APPLY_BQSR; BASE_RECALIBRATOR; GATHER_BQSR_REPORTS } from '../modules/gatk'
 include { 
     COLLECT_QUALITY_YIELD_METRICS;
-    COLLECT_READ_GROUP_BAM_METRICS;
     COLLECT_UNSORTED_READ_GROUP_BAM_METRICS;
     CROSS_CHECK_FINGERPRINTS;
     GATHER_BAM_FILES;
@@ -46,6 +45,7 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
     haplotype_database
 
     use_bwa_mem
+    perform_bqsr
     
     main:
     compression_level = 2
@@ -54,7 +54,6 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
     unmap_contaminant_reads = true
     bin_base_qualities = true
     somatic = false
-    perform_bqsr = true
     allow_empty_ref_alt = false
 
     lod_threshold = -10.0
@@ -197,8 +196,8 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
     contamination = CHECK_CONTAMINATION.out.contamination
 
     duplicate_metrics = MARK_DUPLICATES.out.duplicate_metrics
-    bqsr_report = GATHER_BQSR_REPORTS.out.bqsr_report
+    bqsr_report = perform_bqsr ? GATHER_BQSR_REPORTS.out.bqsr_report : []
 
-    final_bam = GATHER_BAM_FILES.out.aggregated_bam
-    final_bam_index = GATHER_BAM_FILES.out.aggregated_bam_index
+    final_bam = perform_bqsr ? GATHER_BAM_FILES.out.aggregated_bam : sorted_bam_ch.sorted_bam
+    final_bam_index = perform_bqsr ? GATHER_BAM_FILES.out.aggregated_bam_index : sorted_bam_ch.sorted_bam_index
 }

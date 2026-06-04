@@ -66,6 +66,7 @@ workflow {
         subset_contamination_sites_ch.subset_mu,
         haplotype_database_file,
         params.use_bwa_mem,
+        params.perform_bqsr,
     )
 
     publish:
