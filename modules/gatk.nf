@@ -66,7 +66,7 @@ process BASE_RECALIBRATOR {
     val output_prefix
 
     output:
-    path "${output_prefix}.recal_data.${task.index}.csv", emit: recalibration_report
+    path "${output_prefix}.recal_data.${task.index}.txt", emit: recalibration_report
 
     script:
     def known_sites_arg = "--known-sites ${dbsnp_vcf} " + known_indels_sites_vcfs.collect { vcf -> "--known-sites ${vcf}" }.join(' ')
@@ -81,7 +81,7 @@ process BASE_RECALIBRATOR {
         --reference ${ref_fasta} \
         --input ${bam} \
         --use-original-qualities \
-        --output ${output_prefix}.recal_data.${task.index}.csv \
+        --output ${output_prefix}.recal_data.${task.index}.txt \
         ${known_sites_arg} \
         ${intervals_arg}
     """
@@ -97,7 +97,7 @@ process GATHER_BQSR_REPORTS {
     val output_prefix
 
     output:
-    path "${output_prefix}.recal_data.csv", emit: bqsr_report
+    path "${output_prefix}.recal_data.txt", emit: bqsr_report
 
     script:
     def inputs_arg = bqsr_reports.collect {report -> " --input ${report}"}.join(' ')
@@ -105,6 +105,6 @@ process GATHER_BQSR_REPORTS {
     gatk --java-options "-Xms3000m -Xmx3000m" \
         GatherBQSRReports \
         ${inputs_arg} \
-        --output ${output_prefix}.recal_data.csv
+        --output ${output_prefix}.recal_data.txt
     """
 }
