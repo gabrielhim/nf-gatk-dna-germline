@@ -131,7 +131,7 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
         contamination_underestimation_factor,
         compression_level,
         true,
-        sample_name,
+        "${sample_name}.pre_bqsr",
     )
 
     if (perform_bqsr) {
@@ -195,7 +195,7 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
     per_sample_stats = CHECK_CONTAMINATION.out.per_sample_stats
     contamination = CHECK_CONTAMINATION.out.contamination
 
-    duplicate_metrics = MARK_DUPLICATES.out.duplicate_metrics
+    duplication_metrics = MARK_DUPLICATES.out.duplication_metrics
     bqsr_report = perform_bqsr ? GATHER_BQSR_REPORTS.out.bqsr_report : []
 
     final_bam = perform_bqsr ? GATHER_BAM_FILES.out.aggregated_bam : sorted_bam_ch.sorted_bam

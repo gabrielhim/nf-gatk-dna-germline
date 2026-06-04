@@ -3,6 +3,7 @@
 include { SUBSET_CONTAMINATION_RESOURCES } from '../../modules/bedtools'
 
 include { AGGREGATE_BAM_QC } from '../../subworkflows/aggregate_bam_qc'
+include { BAM_TO_CRAM } from '../../subworkflows/bam_to_cram'
 include { UNMAPPED_BAM_TO_ALIGNED_BAM } from '../../subworkflows/unmapped_bam_to_aligned_bam'
 
 workflow {
@@ -85,6 +86,16 @@ workflow {
         fingerprint_genotypes_index_file,
     )
 
+    bam_to_cram_ch = BAM_TO_CRAM(
+        params.sample_name,
+        mapping_workflow_ch.final_bam,
+        ref_fasta_file,
+        ref_fasta_index_file,
+        ref_dict_file,
+        mapping_workflow_ch.duplication_metrics,
+        agg_bam_qc_ch.agg_alignment_summary_metrics,
+    )
+
     publish:
     quality_yield_metrics = mapping_workflow_ch.quality_yield_metrics
 
@@ -102,7 +113,7 @@ workflow {
     per_sample_stats = mapping_workflow_ch.per_sample_stats
     contamination = mapping_workflow_ch.contamination
 
-    duplicate_metrics = mapping_workflow_ch.duplicate_metrics
+    duplication_metrics = mapping_workflow_ch.duplication_metrics
     bqsr_report = mapping_workflow_ch.bqsr_report
 
     final_bam = mapping_workflow_ch.final_bam
@@ -131,6 +142,11 @@ workflow {
 
     fingerprint_summary_metrics = agg_bam_qc_ch.fingerprint_summary_metrics
     fingerprint_detail_metrics = agg_bam_qc_ch.fingerprint_detail_metrics
+
+    cram = bam_to_cram_ch.cram
+    cram_index = bam_to_cram_ch.cram_index
+    cram_md5 = bam_to_cram_ch.cram_md5
+    cram_validation_report = bam_to_cram_ch.validation_report
 }
 
 output {
@@ -170,7 +186,7 @@ output {
     contamination {
         path 'quality_control'
     }
-    duplicate_metrics {
+    duplication_metrics {
         path 'duplicates'
     }
     bqsr_report {
@@ -241,5 +257,17 @@ output {
     }
     fingerprint_detail_metrics {
         path 'quality_control'
+    }
+    cram {
+        path 'alignment'
+    }
+    cram_index {
+        path 'alignment'
+    }
+    cram_md5 {
+        path 'alignment'
+    }
+    cram_validation_report {
+        path 'alignment'
     }
 }
