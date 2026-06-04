@@ -46,7 +46,7 @@ process CHECK_FINGERPRINT_TASK {
     output:
     path "${output_prefix}.fingerprinting_summary_metrics.txt", emit: summary_metrics
     path "${output_prefix}.fingerprinting_detail_metrics.txt", emit: detail_metrics
-    path "lod", emit: lod_score
+    path "lod_value.txt", emit: lod_score
 
     script:
     def input_bam_arg = bam && !vcf ? "--INPUT ${bam} --IGNORE_READ_GROUPS true" : ""
@@ -74,7 +74,7 @@ process CHECK_FINGERPRINT_TASK {
         grep -n "## METRICS CLASS\\tpicard.analysis.FingerprintingSummaryMetrics" | \
         cut -f1 -d:)\
     CONTENT_LINE=\$((\$CONTENT_LINE+2))
-    sed '8q;d' "${output_prefix}.fingerprinting_summary_metrics.txt" | cut -f5 > lod
+    sed '8q;d' "${output_prefix}.fingerprinting_summary_metrics.txt" | cut -f5 > lod_value.txt
     """
 }
 
@@ -301,7 +301,7 @@ process MARK_DUPLICATES {
 
     output:
     path "${output_prefix}.duplicates_marked.bam", emit: dup_marked_bam
-    path "${output_prefix}.duplicate_metrics.txt", emit: duplicate_metrics
+    path "${output_prefix}.duplication_metrics.txt", emit: duplication_metrics
 
     script:
     def inputs_arg = bams.collect { bam -> "--INPUT ${bam}" }.join(' ')
@@ -313,7 +313,7 @@ process MARK_DUPLICATES {
         MarkDuplicates \
         ${inputs_arg} \
         --OUTPUT ${output_prefix}.duplicates_marked.bam \
-        --METRICS_FILE ${output_prefix}.duplicate_metrics.txt \
+        --METRICS_FILE ${output_prefix}.duplication_metrics.txt \
         --VALIDATION_STRINGENCY SILENT \
         ${read_name_regex_arg} \
         ${sorting_collection_size_ratio_arg} \
@@ -352,5 +352,43 @@ process SORT_SAM {
         --CREATE_INDEX true \
         --CREATE_MD5_FILE true \
         --MAX_RECORDS_IN_RAM 300000
+    """
+}
+
+process VALIDATE_SAM_FILE {
+
+    container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
+    memory 8000.MB
+
+    input:
+    path sam
+    path sam_index
+    path ref_fasta
+    path ref_fasta_index
+    path ref_dict
+    val max_output
+    val error_types_to_ignore
+    val is_outlier_data
+    val output_filename
+
+    output:
+    path output_filename, emit: report
+
+    script:
+    def max_output_arg = max_output ? "--MAX_OUTPUT ${max_output}" : ""
+    def error_types_to_ignore_arg = error_types_to_ignore.collect { error -> "--IGNORE ${error}" }.join(' ')
+    def java_inital_memory_mb = task.memory.toMega() - 1000
+    def java_max_memory_mb = task.memory.toMega() - 500
+    """
+    java -Xms${java_inital_memory_mb}m -Xmx${java_max_memory_mb}m -jar /usr/picard/picard.jar \
+        ValidateSamFile \
+        --INPUT ${sam} \
+        --OUTPUT ${output_filename} \
+        --REFERENCE_SEQUENCE ${ref_fasta} \
+        ${max_output_arg} \
+        ${error_types_to_ignore_arg} \
+        --MODE VERBOSE \
+        --SKIP_MATE_VALIDATION ${is_outlier_data} \
+        --IS_BISULFITE_SEQUENCED false
     """
 }
