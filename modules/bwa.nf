@@ -7,7 +7,7 @@ process BWA_MEM_AND_MERGE_ALIGNMENT {
     cpus 16
 
     input:
-    tuple val(output_prefix), path(unmapped_bam)
+    tuple path(unmapped_bam), val(output_prefix)
     path ref_fasta
     path ref_fasta_index
     path ref_dict

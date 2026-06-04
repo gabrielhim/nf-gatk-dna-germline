@@ -1,6 +1,8 @@
 #!/usr/bin/env nextflow
 
 include { SUBSET_CONTAMINATION_RESOURCES } from '../../modules/bedtools'
+
+include { AGGREGATE_BAM_QC } from '../../subworkflows/aggregate_bam_qc'
 include { UNMAPPED_BAM_TO_ALIGNED_BAM } from '../../subworkflows/unmapped_bam_to_aligned_bam'
 
 workflow {
@@ -32,6 +34,8 @@ workflow {
     contamination_sites_bed_file = file(params.contamination_sites_bed)
     contamination_sites_mu_file = file(params.contamination_sites_mu)
     haplotype_database_file = file(params.haplotype_database)
+    fingerprint_genotypes_file = file(params.fingerprint_genotypes)
+    fingerprint_genotypes_index_file = file(params.fingerprint_genotypes_index)
 
     subset_contamination_sites_ch = SUBSET_CONTAMINATION_RESOURCES(
         intervals_ch,
@@ -40,7 +44,7 @@ workflow {
         contamination_sites_mu_file,
     )
 
-    unmapped_bams_ch = channel.fromPath(params.unmapped_bams).map { ubam -> [ubam.baseName, ubam] }
+    unmapped_bams_ch = channel.fromPath(params.unmapped_bams).map { ubam -> [ubam, ubam.baseName] }
 
     mapping_workflow_ch = UNMAPPED_BAM_TO_ALIGNED_BAM(
         params.sample_name,
@@ -66,6 +70,19 @@ workflow {
         subset_contamination_sites_ch.subset_mu,
         haplotype_database_file,
         params.use_bwa_mem,
+        params.perform_bqsr,
+    )
+
+    agg_bam_qc_ch = AGGREGATE_BAM_QC(
+        params.sample_name,
+        mapping_workflow_ch.final_bam,
+        mapping_workflow_ch.final_bam_index,
+        ref_fasta_file,
+        ref_fasta_index_file,
+        ref_dict_file,
+        haplotype_database_file,
+        fingerprint_genotypes_file,
+        fingerprint_genotypes_index_file,
     )
 
     publish:
@@ -90,6 +107,30 @@ workflow {
 
     final_bam = mapping_workflow_ch.final_bam
     final_bam_index = mapping_workflow_ch.final_bam_index
+
+    read_group_alignment_summary_metrics = agg_bam_qc_ch.read_group_alignment_summary_metrics
+    read_group_gc_bias_detail_metrics = agg_bam_qc_ch.read_group_gc_bias_detail_metrics
+    read_group_gc_bias_pdf = agg_bam_qc_ch.read_group_gc_bias_pdf
+    read_group_gc_bias_summary_metrics = agg_bam_qc_ch.read_group_gc_bias_summary_metrics
+
+    read_group_checksum = agg_bam_qc_ch.read_group_checksum
+
+    agg_alignment_summary_metrics = agg_bam_qc_ch.agg_alignment_summary_metrics
+    agg_bait_bias_detail_metrics = agg_bam_qc_ch.agg_bait_bias_detail_metrics
+    agg_bait_bias_summary_metrics = agg_bam_qc_ch.agg_bait_bias_summary_metrics
+    agg_gc_bias_detail_metrics = agg_bam_qc_ch.agg_gc_bias_detail_metrics
+    agg_gc_bias_pdf = agg_bam_qc_ch.agg_gc_bias_pdf
+    agg_gc_bias_summary_metrics = agg_bam_qc_ch.agg_gc_bias_summary_metrics
+    agg_insert_size_histogram_pdf = agg_bam_qc_ch.agg_insert_size_histogram_pdf
+    agg_insert_size_metrics = agg_bam_qc_ch.agg_insert_size_metrics
+    agg_pre_adapter_detail_metrics = agg_bam_qc_ch.agg_pre_adapter_detail_metrics
+    agg_pre_adapter_summary_metrics = agg_bam_qc_ch.agg_pre_adapter_summary_metrics
+    agg_quality_distribution_pdf = agg_bam_qc_ch.agg_quality_distribution_pdf
+    agg_quality_distribution_metrics = agg_bam_qc_ch.agg_quality_distribution_metrics
+    agg_error_summary_metrics = agg_bam_qc_ch.agg_error_summary_metrics
+
+    fingerprint_summary_metrics = agg_bam_qc_ch.fingerprint_summary_metrics
+    fingerprint_detail_metrics = agg_bam_qc_ch.fingerprint_detail_metrics
 }
 
 output {
@@ -140,5 +181,65 @@ output {
     }
     final_bam_index {
         path 'alignment'
+    }
+    read_group_alignment_summary_metrics {
+        path 'quality_control'
+    }
+    read_group_gc_bias_detail_metrics {
+        path 'quality_control'
+    }
+    read_group_gc_bias_pdf {
+        path 'quality_control'
+    }
+    read_group_gc_bias_summary_metrics {
+        path 'quality_control'
+    }
+    read_group_checksum {
+        path 'quality_control'
+    }
+    agg_alignment_summary_metrics {
+        path 'quality_control'
+    }
+    agg_bait_bias_detail_metrics {
+        path 'quality_control'
+    }
+    agg_bait_bias_summary_metrics {
+        path 'quality_control'
+    }
+    agg_gc_bias_detail_metrics {
+        path 'quality_control'
+    }
+    agg_gc_bias_pdf {
+        path 'quality_control'
+    }
+    agg_gc_bias_summary_metrics {
+        path 'quality_control'
+    }
+    agg_insert_size_histogram_pdf {
+        path 'quality_control'
+    }
+    agg_insert_size_metrics {
+        path 'quality_control'
+    }
+    agg_pre_adapter_detail_metrics {
+        path 'quality_control'
+    }
+    agg_pre_adapter_summary_metrics {
+        path 'quality_control'
+    }
+    agg_quality_distribution_pdf {
+        path 'quality_control'
+    }
+    agg_quality_distribution_metrics {
+        path 'quality_control'
+    }
+    agg_error_summary_metrics {
+        path 'quality_control'
+    }
+    fingerprint_summary_metrics {
+        path 'quality_control'
+    }
+    fingerprint_detail_metrics {
+        path 'quality_control'
     }
 }

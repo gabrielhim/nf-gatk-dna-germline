@@ -1,12 +1,141 @@
 #!/usr/bin/env nextflow
 
+process CALCULATE_READ_GROUP_CHECKSUM {
+
+    container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
+    memory 6000.MB
+
+    input:
+    path bam
+    path bam_index
+    val output_prefix
+
+    output:
+    path "${output_prefix}.bam.read_group.md5", emit: read_group_md5
+
+    script:
+    """
+    java -Xms1000m -Xmx3500m -jar /usr/picard/picard.jar \
+        CalculateReadGroupChecksum \
+        --INPUT ${bam} \
+        --OUTPUT ${output_prefix}.bam.read_group.md5
+    """
+}
+
+process CHECK_FINGERPRINT_TASK {
+
+    container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
+    memory 2500.MB
+
+    input:
+    path bam
+    path bam_index
+    path vcf
+    path vcf_index
+    path genotypes
+    path genotypes_index
+    path haplotype_database
+    path ref_fasta
+    path ref_fasta_index
+    val genotype_lod_threshold
+    val allow_lod_zero
+    val input_sample_alias
+    val expected_sample_alias
+    val output_prefix
+
+    output:
+    path "${output_prefix}.fingerprinting_summary_metrics.txt", emit: summary_metrics
+    path "${output_prefix}.fingerprinting_detail_metrics.txt", emit: detail_metrics
+    path "lod", emit: lod_score
+
+    script:
+    def input_bam_arg = bam && !vcf ? "--INPUT ${bam} --IGNORE_READ_GROUPS true" : ""
+    def input_vcf_arg = vcf ? "--INPUT ${vcf} --OBSERVED_SAMPLE_ALIAS \"${input_sample_alias}\"" : ""
+    def ref_arg = ref_fasta ? "--REFERENCE_SEQUENCE ${ref_fasta}" : ""
+    def allow_lod_zero_arg = allow_lod_zero ? "--EXIT_CODE_WHEN_NO_VALID_CHECKS 0" : ""
+    def java_initial_memory_mb = task.memory.toMega() - 1000
+    def java_max_memory_mb = task.memory.toMega() - 500
+    """
+    set -e
+    java -Xms${java_initial_memory_mb}m -Xmx${java_max_memory_mb}m -Dpicard.useLegacyParser=false -jar /usr/picard/picard.jar \
+        CheckFingerprint \
+        ${input_bam_arg} \
+        ${input_vcf_arg} \
+        --GENOTYPES ${genotypes} \
+        --EXPECTED_SAMPLE_ALIAS ${expected_sample_alias} \
+        --HAPLOTYPE_MAP ${haplotype_database} \
+        --GENOTYPE_LOD_THRESHOLD ${genotype_lod_threshold} \
+        --SUMMARY_OUTPUT "${output_prefix}.fingerprinting_summary_metrics.txt" \
+        --DETAIL_OUTPUT "${output_prefix}.fingerprinting_detail_metrics.txt" \
+        ${ref_arg} \
+        ${allow_lod_zero_arg}
+
+    CONTENT_LINE=\$(cat "${output_prefix}.fingerprinting_summary_metrics.txt" | \
+        grep -n "## METRICS CLASS\\tpicard.analysis.FingerprintingSummaryMetrics" | \
+        cut -f1 -d:)\
+    CONTENT_LINE=\$((\$CONTENT_LINE+2))
+    sed '8q;d' "${output_prefix}.fingerprinting_summary_metrics.txt" | cut -f5 > lod
+    """
+}
+
+process COLLECT_AGGREGATION_METRICS {
+
+    container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
+    memory 8000.MB
+
+    input:
+    path bam
+    path bam_index
+    path ref_fasta
+    path ref_fasta_index
+    path ref_dict
+    val collect_gc_bias_metrics
+    val output_prefix
+
+    output:
+    path "${output_prefix}.alignment_summary_metrics", emit: alignment_summary_metrics
+    path "${output_prefix}.bait_bias_detail_metrics", emit: bait_bias_detail_metrics
+    path "${output_prefix}.bait_bias_summary_metrics", emit: bait_bias_summary_metrics
+    path "${output_prefix}.gc_bias_detail_metrics", emit: gc_bias_detail_metrics, optional: true
+    path "${output_prefix}.gc_bias_pdf.pdf", emit: gc_bias_pdf, optional: true
+    path "${output_prefix}.gc_bias_summary_metrics", emit: gc_bias_summary_metrics, optional: true
+    path "${output_prefix}.insert_size_histogram.pdf", emit: insert_size_histogram_pdf, optional: true
+    path "${output_prefix}.insert_size_metrics", emit: insert_size_metrics, optional: true
+    path "${output_prefix}.pre_adapter_detail_metrics", emit: pre_adapter_detail_metrics
+    path "${output_prefix}.pre_adapter_summary_metrics", emit: pre_adapter_summary_metrics
+    path "${output_prefix}.quality_distribution.pdf", emit: quality_distribution_pdf
+    path "${output_prefix}.quality_distribution_metrics", emit: quality_distribution_metrics
+    path "${output_prefix}.error_summary_metrics", emit: error_summary_metrics
+
+    script:
+    def collect_gc_bias_metrics_arg = collect_gc_bias_metrics ? "--PROGRAM CollectGcBiasMetrics" : ""
+    """
+    java -Xms5000m -Xmx6500m -jar /usr/picard/picard.jar \
+        CollectMultipleMetrics \
+        --INPUT ${bam} \
+        --REFERENCE_SEQUENCE ${ref_fasta} \
+        --OUTPUT ${output_prefix} \
+        --ASSUME_SORTED true \
+        --PROGRAM null \
+        --PROGRAM CollectAlignmentSummaryMetrics \
+        --PROGRAM CollectInsertSizeMetrics \
+        --PROGRAM CollectSequencingArtifactMetrics \
+        --PROGRAM QualityScoreDistribution \
+        ${collect_gc_bias_metrics_arg} \
+        --METRIC_ACCUMULATION_LEVEL null \
+        --METRIC_ACCUMULATION_LEVEL SAMPLE \
+        --METRIC_ACCUMULATION_LEVEL LIBRARY
+    """
+
+}
+
 process COLLECT_QUALITY_YIELD_METRICS {
 
     container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
     memory '3.5 GB'
 
     input:
-    tuple val(output_prefix), path(bam)
+    tuple path(bam), val(output_prefix)
 
     output:
     path "${output_prefix}.quality_yield_metrics.txt", emit: quality_yield_metrics
@@ -24,14 +153,16 @@ process COLLECT_QUALITY_YIELD_METRICS {
 process COLLECT_READ_GROUP_BAM_METRICS {
 
     container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
-    memory 7.GB
+    memory 7000.MB
 
     input:
-    tuple val(output_prefix), path(bam)
+    path bam
+    path bam_index
     path ref_fasta
     path ref_fasta_index
     path ref_dict
     val collect_gc_bias_metrics
+    val output_prefix
 
     output:
     path "${output_prefix}.alignment_summary_metrics", emit: alignment_summary_metrics
@@ -62,7 +193,7 @@ process COLLECT_UNSORTED_READ_GROUP_BAM_METRICS {
     memory 7.GB
 
     input:
-    tuple val(output_prefix), path(bam)
+    tuple path(bam), val(output_prefix)
 
     output:
     path "${output_prefix}.base_distribution_by_cycle.pdf", emit: base_distribution_by_cycle_pdf
