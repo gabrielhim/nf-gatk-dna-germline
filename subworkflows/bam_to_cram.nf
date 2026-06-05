@@ -1,6 +1,6 @@
 #!/usr/bin/env nextflow
 
-include { CHECK_PRE_VALIDATION } from '../modules/python'
+include { CHECK_PRE_VALIDATION } from '../modules/utilities'
 include { CONVERT_TO_CRAM } from '../modules/samtools'
 include { VALIDATE_SAM_FILE } from '../modules/picard'
 
