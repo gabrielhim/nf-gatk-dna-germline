@@ -5,10 +5,12 @@ include { SUBSET_CONTAMINATION_RESOURCES } from '../../modules/bedtools'
 include { AGGREGATE_BAM_QC } from '../../subworkflows/aggregate_bam_qc'
 include { BAM_TO_CRAM } from '../../subworkflows/bam_to_cram'
 include { UNMAPPED_BAM_TO_ALIGNED_BAM } from '../../subworkflows/unmapped_bam_to_aligned_bam'
+include { VARIANT_CALLING } from '../../subworkflows/variant_calling'
 
 workflow {
     
     main:
+    unmapped_bams_ch = channel.fromPath(params.unmapped_bams).map { ubam -> [ubam, ubam.baseName] }
     intervals_ch = channel.fromPath(params.target_interval_list)
 
     ref_fasta_file = file(params.ref_fasta)
@@ -25,6 +27,7 @@ workflow {
     reference_bin_file = file(params.reference_bin)
     hash_table_cfg_bin_file = file(params.hash_table_cfg_bin)
     hash_table_cmp_file = file(params.hash_table_cmp)
+    ref_str_file = file(params.ref_str)
 
     dbsnp_vcf_file = file(params.dbsnp_vcf)
     dbsnp_vcf_index_file = file(params.dbsnp_vcf_index)
@@ -38,6 +41,9 @@ workflow {
     fingerprint_genotypes_file = file(params.fingerprint_genotypes)
     fingerprint_genotypes_index_file = file(params.fingerprint_genotypes_index)
 
+    calling_interval_list_file = file(params.calling_interval_list)
+    evaluation_interval_list_file = file(params.evaluation_interval_list)
+
     subset_contamination_sites_ch = SUBSET_CONTAMINATION_RESOURCES(
         intervals_ch,
         contamination_sites_ud_file,
@@ -45,9 +51,7 @@ workflow {
         contamination_sites_mu_file,
     )
 
-    unmapped_bams_ch = channel.fromPath(params.unmapped_bams).map { ubam -> [ubam, ubam.baseName] }
-
-    mapping_workflow_ch = UNMAPPED_BAM_TO_ALIGNED_BAM(
+    alignment_ch = UNMAPPED_BAM_TO_ALIGNED_BAM(
         params.sample_name,
         unmapped_bams_ch,
         ref_fasta_file,
@@ -76,8 +80,8 @@ workflow {
 
     agg_bam_qc_ch = AGGREGATE_BAM_QC(
         params.sample_name,
-        mapping_workflow_ch.final_bam,
-        mapping_workflow_ch.final_bam_index,
+        alignment_ch.final_bam,
+        alignment_ch.final_bam_index,
         ref_fasta_file,
         ref_fasta_index_file,
         ref_dict_file,
@@ -88,36 +92,59 @@ workflow {
 
     bam_to_cram_ch = BAM_TO_CRAM(
         params.sample_name,
-        mapping_workflow_ch.final_bam,
+        alignment_ch.final_bam,
         ref_fasta_file,
         ref_fasta_index_file,
         ref_dict_file,
-        mapping_workflow_ch.duplication_metrics,
+        alignment_ch.duplication_metrics,
         agg_bam_qc_ch.agg_alignment_summary_metrics,
     )
 
+    variant_calling_ch = VARIANT_CALLING(
+        params.sample_name,
+        alignment_ch.final_bam,
+        alignment_ch.final_bam_index,
+        calling_interval_list_file,
+        evaluation_interval_list_file,
+        ref_fasta_file,
+        ref_fasta_index_file,
+        ref_dict_file,
+        ref_str_file,
+        dbsnp_vcf_file,
+        dbsnp_vcf_index_file,
+        params.haplotype_scatter_count,
+        params.break_bands_at_multiples_of,
+        alignment_ch.contamination,
+        params.run_dragen_mode_variant_calling,
+        params.use_spanning_event_genotyping,
+        params.make_gvcf,
+        params.make_bamout,
+        params.skip_reblocking,
+        params.use_dragen_hard_filtering,
+    )
+
     publish:
-    quality_yield_metrics = mapping_workflow_ch.quality_yield_metrics
+    quality_yield_metrics = alignment_ch.quality_yield_metrics
 
-    unsorted_read_group_base_distribution_by_cycle_pdf = mapping_workflow_ch.unsorted_read_group_base_distribution_by_cycle_pdf
-    unsorted_read_group_base_distribution_by_cycle_metrics = mapping_workflow_ch.unsorted_read_group_base_distribution_by_cycle_metrics
-    unsorted_read_group_insert_size_histogram_pdf = mapping_workflow_ch.unsorted_read_group_insert_size_histogram_pdf
-    unsorted_read_group_insert_size_metrics = mapping_workflow_ch.unsorted_read_group_insert_size_metrics
-    unsorted_read_group_quality_by_cycle_pdf = mapping_workflow_ch.unsorted_read_group_quality_by_cycle_pdf
-    unsorted_read_group_quality_by_cycle_metrics = mapping_workflow_ch.unsorted_read_group_quality_by_cycle_metrics
-    unsorted_read_group_quality_distribution_pdf = mapping_workflow_ch.unsorted_read_group_quality_distribution_pdf
-    unsorted_read_group_quality_distribution_metrics = mapping_workflow_ch.unsorted_read_group_quality_distribution_metrics
+    unsorted_read_group_base_distribution_by_cycle_pdf = alignment_ch.unsorted_read_group_base_distribution_by_cycle_pdf
+    unsorted_read_group_base_distribution_by_cycle_metrics = alignment_ch.unsorted_read_group_base_distribution_by_cycle_metrics
+    unsorted_read_group_insert_size_histogram_pdf = alignment_ch.unsorted_read_group_insert_size_histogram_pdf
+    unsorted_read_group_insert_size_metrics = alignment_ch.unsorted_read_group_insert_size_metrics
+    unsorted_read_group_quality_by_cycle_pdf = alignment_ch.unsorted_read_group_quality_by_cycle_pdf
+    unsorted_read_group_quality_by_cycle_metrics = alignment_ch.unsorted_read_group_quality_by_cycle_metrics
+    unsorted_read_group_quality_distribution_pdf = alignment_ch.unsorted_read_group_quality_distribution_pdf
+    unsorted_read_group_quality_distribution_metrics = alignment_ch.unsorted_read_group_quality_distribution_metrics
 
-    cross_check_fingerprints_metrics = mapping_workflow_ch.cross_check_fingerprints_metrics
+    cross_check_fingerprints_metrics = alignment_ch.cross_check_fingerprints_metrics
 
-    per_sample_stats = mapping_workflow_ch.per_sample_stats
-    contamination = mapping_workflow_ch.contamination
+    per_sample_stats = alignment_ch.per_sample_stats
+    contamination = alignment_ch.contamination
 
-    duplication_metrics = mapping_workflow_ch.duplication_metrics
-    bqsr_report = mapping_workflow_ch.bqsr_report
+    duplication_metrics = alignment_ch.duplication_metrics
+    bqsr_report = alignment_ch.bqsr_report
 
-    final_bam = mapping_workflow_ch.final_bam
-    final_bam_index = mapping_workflow_ch.final_bam_index
+    final_bam = alignment_ch.final_bam
+    final_bam_index = alignment_ch.final_bam_index
 
     read_group_alignment_summary_metrics = agg_bam_qc_ch.read_group_alignment_summary_metrics
     read_group_gc_bias_detail_metrics = agg_bam_qc_ch.read_group_gc_bias_detail_metrics
@@ -147,6 +174,13 @@ workflow {
     cram_index = bam_to_cram_ch.cram_index
     cram_md5 = bam_to_cram_ch.cram_md5
     cram_validation_report = bam_to_cram_ch.validation_report
+
+    final_vcf = variant_calling_ch.final_vcf
+    final_vcf_index = variant_calling_ch.final_vcf_index
+    bamout = variant_calling_ch.bamout
+    bamout_index = variant_calling_ch.bamout_index
+    vcf_summary_metrics = variant_calling_ch.vcf_summary_metrics
+    vcf_detail_metrics = variant_calling_ch.vcf_detail_metrics
 }
 
 output {
@@ -269,5 +303,23 @@ output {
     }
     cram_validation_report {
         path 'alignment'
+    }
+    final_vcf {
+        path 'variants'
+    }
+    final_vcf_index {
+        path 'variants'
+    }
+    bamout {
+        path 'variants'
+    }
+    bamout_index {
+        path 'variants'
+    }
+    vcf_summary_metrics {
+        path 'quality_control'
+    }
+    vcf_detail_metrics {
+        path 'quality_control'
     }
 }

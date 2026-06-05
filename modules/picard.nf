@@ -222,6 +222,38 @@ process COLLECT_UNSORTED_READ_GROUP_BAM_METRICS {
     """
 }
 
+process COLLECT_VARIANT_CALLING_METRICS {
+    
+    container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
+    memory 3000.MB
+
+    input:
+    path vcf
+    path vcf_index
+    path ref_dict
+    path dbsnp_vcf
+    path dbsnp_vcf_index
+    path evaluation_interval_list
+    val is_gvcf
+    val output_prefix
+
+    output:
+    path "${output_prefix}.variant_calling_summary_metrics", emit: variant_calling_summary_metrics
+    path "${output_prefix}.variant_calling_detail_metrics", emit: variant_calling_detail_metrics
+
+    script:
+    """
+    java -Xms2000m -Xmx2500m -jar /usr/picard/picard.jar \
+        CollectVariantCallingMetrics \
+        --INPUT ${vcf} \
+        --OUTPUT ${output_prefix} \
+        --DBSNP ${dbsnp_vcf} \
+        --SEQUENCE_DICTIONARY ${ref_dict} \
+        --TARGET_INTERVALS ${evaluation_interval_list} \
+        --GVCF_INPUT ${is_gvcf}
+    """
+}
+
 process CROSS_CHECK_FINGERPRINTS {
 
     container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
@@ -263,17 +295,19 @@ process GATHER_BAM_FILES {
     path bams
     val create_index
     val compression_level
-    val output_prefix
+    val output_filename
 
     output:
-    path "${output_prefix}.aggregated.bam", emit: aggregated_bam
-    path "${output_prefix}.aggregated.bai", emit: aggregated_bam_index, optional: true
-    path "${output_prefix}.aggregated.bam.md5", emit: aggregated_bam_md5, optional: true
+    path output_filename, emit: aggregated_bam
+    path "${file(output_filename).baseName}.bai", emit: aggregated_bam_index, optional: true
+    path "${output_filename}.md5", emit: aggregated_bam_md5, optional: true
 
     script:
     def java_initial_memory_mb = task.memory.toMega() - 1000
     def java_max_memory_mb = task.memory.toMega() - 500
     """
+    set -eo pipefail
+
     # Order files numerically using the indices in the filename to get a sorted output.
     bash_inputs_arg=\$(ls ${bams.join(' ')} | sort -V | awk '{print "--INPUT "\$0}' | tr '\\n' ' ')
 
@@ -281,7 +315,7 @@ process GATHER_BAM_FILES {
         -Xms${java_initial_memory_mb}m -Xmx${java_max_memory_mb}m -jar /usr/picard/picard.jar \
         GatherBamFiles \
         \$bash_inputs_arg \
-        --OUTPUT ${output_prefix}.aggregated.bam \
+        --OUTPUT ${output_filename} \
         --CREATE_INDEX ${create_index} \
         --CREATE_MD5_FILE ${create_index}
     """
@@ -321,6 +355,70 @@ process MARK_DUPLICATES {
         --ASSUME_SORT_ORDER "queryname" \
         --CLEAR_DT "false" \
         --ADD_PG_TAG_TO_READS false
+    """
+}
+
+process MERGE_VCFS {
+
+    container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
+    memory 3000.MB
+
+    input:
+    path vcfs
+    path vcf_indices
+    val output_filename
+
+    output:
+    path output_filename, emit: merged_vcf
+    path "${output_filename}.tbi", emit: merged_vcf_index
+
+    script:
+    """
+    set -eo pipefail
+
+    # Order files numerically using the indices in the filename to get a sorted output.
+    bash_inputs_arg=\$(ls ${vcfs.join(' ')} | sort -V | awk '{print "--INPUT "\$0}' | tr '\\n' ' ')
+
+    java -Xms2000m -Xmx2500m -jar /usr/picard/picard.jar \
+        MergeVcfs \
+        \$bash_inputs_arg \
+        --OUTPUT ${output_filename}
+    """
+}
+
+process SCATTER_INTERVAL_LIST {
+
+    container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
+    memory 2000.MB
+
+    input:
+    path interval_list
+    val scatter_count
+    val break_bands_at_multiples_of
+
+    output:
+    path "*.scattered.interval_list", emit: scattered_interval_lists
+
+    script:
+    """
+    set -e
+
+    mkdir out
+    java -Xms1000m -Xmx1500m -jar /usr/picard/picard.jar \
+        IntervalListTools \
+        --SCATTER_COUNT ${scatter_count} \
+        --SUBDIVISION_MODE BALANCING_WITHOUT_INTERVAL_SUBDIVISION_WITH_OVERFLOW \
+        --UNIQUE true \
+        --SORT true \
+        --BREAK_BANDS_AT_MULTIPLES_OF ${break_bands_at_multiples_of} \
+        --INPUT ${interval_list} \
+        --OUTPUT out
+
+    # Rename scattered intervals with their respective folder name, then move them
+    # to the execution directory, so that nextflow finds all files with the glob pattern.
+    for subset in \$(ls out); do
+        cp out/\${subset}/scattered.interval_list \${subset}.scattered.interval_list
+    done
     """
 }
 

@@ -11,8 +11,8 @@ workflow AGGREGATE_BAM_QC {
 
     take:
     sample_name
-    bam
-    bam_index
+    bam_ch
+    bam_index_ch
     ref_fasta
     ref_fasta_index
     ref_dict
@@ -25,8 +25,8 @@ workflow AGGREGATE_BAM_QC {
     collect_gc_bias_metrics = true
 
     COLLECT_READ_GROUP_BAM_METRICS(
-        bam,
-        bam_index,
+        bam_ch,
+        bam_index_ch,
         ref_fasta,
         ref_fasta_index,
         ref_dict,
@@ -35,14 +35,14 @@ workflow AGGREGATE_BAM_QC {
     )
 
     COLLECT_AGGREGATION_METRICS(
-        bam, bam_index, ref_fasta, ref_fasta_index, ref_dict, collect_gc_bias_metrics, sample_name
+        bam_ch, bam_index_ch, ref_fasta, ref_fasta_index, ref_dict, collect_gc_bias_metrics, sample_name
     )
 
     check_fingerprint = haplotype_database && fingerprint_genotypes
     if (check_fingerprint) {
         CHECK_FINGERPRINT_TASK(
-            bam,
-            bam_index,
+            bam_ch,
+            bam_index_ch,
             [],
             [],
             fingerprint_genotypes,
@@ -52,13 +52,13 @@ workflow AGGREGATE_BAM_QC {
             ref_fasta_index,
             genotype_lod_threshold,
             false,
-            false,
+            [],
             sample_name,
             sample_name,
         )
     }
 
-    CALCULATE_READ_GROUP_CHECKSUM(bam, bam_index, sample_name)
+    CALCULATE_READ_GROUP_CHECKSUM(bam_ch, bam_index_ch, sample_name)
 
     emit:
     read_group_alignment_summary_metrics = COLLECT_READ_GROUP_BAM_METRICS.out.alignment_summary_metrics
