@@ -44,20 +44,19 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
     
     haplotype_database
 
-    use_bwa_mem
+    hard_clip_reads
+    unmap_contaminant_reads
+    bin_base_qualities
     perform_bqsr
+    use_bwa_mem
+    allow_empty_ref_alt
+
+    lod_threshold
+    cross_check_fingerprints_by
     
     main:
     compression_level = 2
-    
-    hard_clip_reads = false
-    unmap_contaminant_reads = true
-    bin_base_qualities = true
     somatic = false
-    allow_empty_ref_alt = false
-
-    lod_threshold = -10.0
-    cross_check_fingerprints_by = "READGROUP"
     contamination_underestimation_factor = 0.75
 
     COLLECT_QUALITY_YIELD_METRICS(unmapped_bams_ch)

@@ -24,11 +24,6 @@ workflow {
     ref_pac_file = file(params.ref_pac)
     ref_sa_file = file(params.ref_sa)
 
-    reference_bin_file = file(params.reference_bin)
-    hash_table_cfg_bin_file = file(params.hash_table_cfg_bin)
-    hash_table_cmp_file = file(params.hash_table_cmp)
-    ref_str_file = file(params.ref_str)
-
     dbsnp_vcf_file = file(params.dbsnp_vcf)
     dbsnp_vcf_index_file = file(params.dbsnp_vcf_index)
     known_indels_sites_vcf_files = channel.fromPath(params.known_indels_sites_vcfs).collect()
@@ -45,6 +40,10 @@ workflow {
     evaluation_interval_list_file = file(params.evaluation_interval_list)
     target_interval_list_file = file(params.target_interval_list)
     bait_interval_list_file = file(params.bait_interval_list)
+
+    lod_threshold = -10.0
+    cross_check_fingerprints_by = "READGROUP"
+    collect_gc_bias_metrics = false
 
     subset_contamination_sites_ch = SUBSET_CONTAMINATION_RESOURCES(
         target_interval_list_file,
@@ -65,9 +64,9 @@ workflow {
         ref_bwt_file,
         ref_pac_file,
         ref_sa_file,
-        reference_bin_file,
-        hash_table_cfg_bin_file,
-        hash_table_cmp_file,
+        [],
+        [],
+        [],
         dbsnp_vcf_file,
         dbsnp_vcf_index_file,
         known_indels_sites_vcf_files,
@@ -76,8 +75,14 @@ workflow {
         subset_contamination_sites_ch.subset_bed,
         subset_contamination_sites_ch.subset_mu,
         haplotype_database_file,
-        params.use_bwa_mem,
+        params.hard_clip_reads,
+        params.unmap_contaminant_reads,
+        params.bin_base_qualities,
         params.perform_bqsr,
+        params.use_bwa_mem,
+        params.allow_empty_ref_alt,
+        lod_threshold,
+        cross_check_fingerprints_by,
     )
 
     agg_bam_qc_ch = AGGREGATE_BAM_QC(
@@ -90,6 +95,7 @@ workflow {
         haplotype_database_file,
         fingerprint_genotypes_file,
         fingerprint_genotypes_index_file,
+        collect_gc_bias_metrics,
     )
 
     bam_to_cram_ch = BAM_TO_CRAM(
@@ -111,7 +117,7 @@ workflow {
         ref_fasta_file,
         ref_fasta_index_file,
         ref_dict_file,
-        ref_str_file,
+        [],
         dbsnp_vcf_file,
         dbsnp_vcf_index_file,
         params.haplotype_scatter_count,
@@ -194,7 +200,7 @@ workflow {
     vcf_summary_metrics = variant_calling_ch.vcf_summary_metrics
     vcf_detail_metrics = variant_calling_ch.vcf_detail_metrics
 
-    hybrid_selection_metrics = COLLECT_HS_METRICS.out.hybrid_selection_metrics
+    hybrid_selection_metrics = hs_metrics_ch.hybrid_selection_metrics
 }
 
 output {
