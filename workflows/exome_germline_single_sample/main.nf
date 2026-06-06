@@ -44,6 +44,7 @@ workflow {
     lod_threshold = -10.0
     cross_check_fingerprints_by = "READGROUP"
     collect_gc_bias_metrics = false
+    make_gvcf = true
 
     subset_contamination_sites_ch = SUBSET_CONTAMINATION_RESOURCES(
         target_interval_list_file,
@@ -125,8 +126,8 @@ workflow {
         alignment_ch.contamination,
         params.run_dragen_mode_variant_calling,
         params.use_spanning_event_genotyping,
-        params.make_gvcf,
-        params.make_bamout,
+        make_gvcf,
+        params.save_bamout,
         params.skip_reblocking,
         params.use_dragen_hard_filtering,
     )
