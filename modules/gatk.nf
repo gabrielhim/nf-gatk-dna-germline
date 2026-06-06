@@ -126,22 +126,20 @@ process DRAGEN_HARD_FILTER_VCF {
     input:
     path vcf
     path vcf_index
-    val is_gvcf
-    val output_prefix
+    val output_filename
 
     output:
-    path "*.vcf.gz", emit: filtered_vcf
-    path ".vcf.gz.tbi", emit: filtered_vcf_index
+    path output_filename, emit: filtered_vcf
+    path "${output_filename}.tbi", emit: filtered_vcf_index
 
     script:
-    def vcf_suffix = is_gvcf ? "hard-filtered.g.vcf.gz" : "hard-filtered.vcf.gz"
     """
     gatk --java-options "-Xms2000m -Xmx2500m" \
         VariantFiltration \
         --variant ${vcf} \
         --filter-expression "QUAL < 10.4139" \
         --filter-name "DRAGENHardQUAL" \
-        --output ${output_prefix}.${vcf_suffix}
+        --output ${output_filename}
     """
 }
 

@@ -69,37 +69,34 @@ workflow VARIANT_CALLING {
         sample_name,
     )
 
-    if (use_dragen_hard_filtering) {
-        DRAGEN_HARD_FILTER_VCF(
-            haplotype_caller_ch.vcf, haplotype_caller_ch.vcf_index, make_gvcf, sample_name
-        )
-        
-        vcfs_to_merge_ch = DRAGEN_HARD_FILTER_VCF.out.filtered_vcf
-        vcf_indices_to_merge_ch = DRAGEN_HARD_FILTER_VCF.out.filtered_vcf_index
-        merged_vcf_basename ="${sample_name}.hard-filtered"
-    } else {
-        vcfs_to_merge_ch = haplotype_caller_ch.vcf
-        vcf_indices_to_merge_ch = haplotype_caller_ch.vcf_index
-        merged_vcf_basename = "${sample_name}.haplotype_caller"
-    }
-
     merged_vcf_ch = MERGE_VCFS(
-        vcfs_to_merge_ch.collect(),
-        vcf_indices_to_merge_ch.collect(),
-        make_gvcf ? "${merged_vcf_basename}.g.vcf.gz" : "${merged_vcf_basename}.vcf.gz",
+        haplotype_caller_ch.vcf.collect(),
+        haplotype_caller_ch.vcf_index.collect(),
+        make_gvcf ? "${sample_name}.haplotype_caller.g.vcf.gz" : "${sample_name}.haplotype_caller.vcf.gz",
     )
 
     if (make_bamout) {
-        SORT_SAM(haplotype_caller_ch.bamout, 2, sample_name)
+        SORT_SAM(haplotype_caller_ch.bamout, 2, sample_name, true)
 
         MERGE_BAMOUTS(SORT_SAM.out.sorted_bam.collect(), "${sample_name}.haplotype_caller.bamout.bam")
     }
 
+    if (use_dragen_hard_filtering) {
+        DRAGEN_HARD_FILTER_VCF(
+            merged_vcf_ch.merged_vcf,
+            merged_vcf_ch.merged_vcf_index,
+            make_gvcf ? "${sample_name}.hard-filtered.g.vcf.gz" : "${sample_name}.hard-filtered.vcf.gz",
+        )
+    }
+
+    merged_filt_vcf_ch = use_dragen_hard_filtering ? DRAGEN_HARD_FILTER_VCF.out.filtered_vcf : merged_vcf_ch.merged_vcf
+    merged_filt_vcf_index_ch = use_dragen_hard_filtering ? DRAGEN_HARD_FILTER_VCF.out.filtered_vcf_index : merged_vcf_ch.merged_vcf_index
+
     run_reblock = make_gvcf && !skip_reblocking
     if (run_reblock) {
         REBLOCK_GVCF(
-            merged_vcf_ch.merged_vcf,
-            merged_vcf_ch.merged_vcf_index,
+            merged_filt_vcf_ch,
+            merged_filt_vcf_index_ch,
             ref_fasta,
             ref_fasta_index,
             ref_dict,
@@ -109,8 +106,8 @@ workflow VARIANT_CALLING {
         )
     }
 
-    final_vcf = run_reblock ? REBLOCK_GVCF.out.reblocked_gvcf : merged_vcf_ch.merged_vcf
-    final_vcf_index = run_reblock ? REBLOCK_GVCF.out.reblocked_gvcf_index : merged_vcf_ch.merged_vcf_index
+    final_vcf = run_reblock ? REBLOCK_GVCF.out.reblocked_gvcf : merged_filt_vcf_ch
+    final_vcf_index = run_reblock ? REBLOCK_GVCF.out.reblocked_gvcf_index : merged_filt_vcf_index_ch
 
     VALIDATE_VCF(
         final_vcf,
