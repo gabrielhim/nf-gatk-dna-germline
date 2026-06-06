@@ -2,7 +2,7 @@
 
 include { BWA_MEM_AND_MERGE_ALIGNMENT } from '../modules/bwa'
 include { DRAGMAP_AND_MERGE_ALIGNMENT } from '../modules/dragmap'
-include { CREATE_SEQUENCE_GROUPING_TSV } from '../modules/python'
+include { CREATE_SEQUENCE_GROUPING_TSV } from '../modules/utilities'
 include { CHECK_CONTAMINATION } from '../modules/verify_bam_id'
 include { APPLY_BQSR; BASE_RECALIBRATOR; GATHER_BQSR_REPORTS } from '../modules/gatk'
 include { 
@@ -107,7 +107,9 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
 
     MARK_DUPLICATES(merged_bam_ch.collect(), false, false, compression_level, sample_name)
 
-    sorted_bam_ch = SORT_SAM(MARK_DUPLICATES.out.dup_marked_bam, compression_level, sample_name)
+    sorted_bam_ch = SORT_SAM(
+        MARK_DUPLICATES.out.dup_marked_bam, compression_level, sample_name, false
+    )
 
     if (haplotype_database) {
         CROSS_CHECK_FINGERPRINTS(
@@ -175,7 +177,9 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
             sample_name,
         )
 
-        GATHER_BAM_FILES(APPLY_BQSR.out.recalibrated_bam.collect(), true, compression_level, sample_name)
+        GATHER_BAM_FILES(
+            APPLY_BQSR.out.recalibrated_bam.collect(), true, compression_level, sample_name
+        )
     }
 
     emit:
@@ -193,7 +197,7 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
     cross_check_fingerprints_metrics = CROSS_CHECK_FINGERPRINTS.out.cross_check_fingerprints_metrics
 
     per_sample_stats = CHECK_CONTAMINATION.out.per_sample_stats
-    contamination = CHECK_CONTAMINATION.out.contamination
+    contamination = CHECK_CONTAMINATION.out.contamination.map { f -> file(f).text.trim().toFloat() }.first()
 
     duplication_metrics = MARK_DUPLICATES.out.duplication_metrics
     bqsr_report = perform_bqsr ? GATHER_BQSR_REPORTS.out.bqsr_report : []
