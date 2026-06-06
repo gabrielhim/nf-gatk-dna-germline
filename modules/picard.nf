@@ -295,12 +295,12 @@ process GATHER_BAM_FILES {
     path bams
     val create_index
     val compression_level
-    val output_filename
+    val output_prefix
 
     output:
-    path output_filename, emit: aggregated_bam
-    path "${file(output_filename).baseName}.bai", emit: aggregated_bam_index, optional: true
-    path "${output_filename}.md5", emit: aggregated_bam_md5, optional: true
+    path "${output_prefix}.aggregated.bam", emit: aggregated_bam
+    path "${output_prefix}.aggregated.bai", emit: aggregated_bam_index, optional: true
+    path "${output_prefix}.aggregated.bam.md5", emit: aggregated_bam_md5, optional: true
 
     script:
     def java_initial_memory_mb = task.memory.toMega() - 1000
@@ -315,7 +315,7 @@ process GATHER_BAM_FILES {
         -Xms${java_initial_memory_mb}m -Xmx${java_max_memory_mb}m -jar /usr/picard/picard.jar \
         GatherBamFiles \
         \$bash_inputs_arg \
-        --OUTPUT ${output_filename} \
+        --OUTPUT ${output_prefix}.aggregated.bam \
         --CREATE_INDEX ${create_index} \
         --CREATE_MD5_FILE ${create_index}
     """
@@ -431,13 +431,15 @@ process SORT_SAM {
     path bam
     val compression_level
     val output_prefix
+    val add_index_to_filename
 
     output:
-    path "${output_prefix}.sorted.bam", emit: sorted_bam
-    path "${output_prefix}.sorted.bai", emit: sorted_bam_index
-    path "${output_prefix}.sorted.bam.md5", emit: sorted_bam_md5
+    path "${output_prefix}.sorted*.bam", emit: sorted_bam
+    path "${output_prefix}.sorted*.bai", emit: sorted_bam_index
+    path "${output_prefix}.sorted*.bam.md5", emit: sorted_bam_md5
 
     script:
+    def index_number = add_index_to_filename ? ".${task.index}" : ""
     def java_inital_memory_mb = task.memory.toMega() - 1000
     def java_max_memory_mb = task.memory.toMega() - 500
     """
@@ -445,7 +447,7 @@ process SORT_SAM {
         -Xms${java_inital_memory_mb}m -Xmx${java_max_memory_mb}m -jar /usr/picard/picard.jar \
         SortSam \
         --INPUT ${bam} \
-        --OUTPUT ${output_prefix}.sorted.bam \
+        --OUTPUT ${output_prefix}.sorted${index_number}.bam \
         --SORT_ORDER "coordinate" \
         --CREATE_INDEX true \
         --CREATE_MD5_FILE true \

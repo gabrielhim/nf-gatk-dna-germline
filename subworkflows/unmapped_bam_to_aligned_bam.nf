@@ -107,7 +107,9 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
 
     MARK_DUPLICATES(merged_bam_ch.collect(), false, false, compression_level, sample_name)
 
-    sorted_bam_ch = SORT_SAM(MARK_DUPLICATES.out.dup_marked_bam, compression_level, sample_name)
+    sorted_bam_ch = SORT_SAM(
+        MARK_DUPLICATES.out.dup_marked_bam, compression_level, sample_name, false
+    )
 
     if (haplotype_database) {
         CROSS_CHECK_FINGERPRINTS(
@@ -176,10 +178,7 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
         )
 
         GATHER_BAM_FILES(
-            APPLY_BQSR.out.recalibrated_bam.collect(),
-            true,
-            compression_level,
-            "${sample_name}.aggregated.bam",
+            APPLY_BQSR.out.recalibrated_bam.collect(), true, compression_level, sample_name
         )
     }
 
