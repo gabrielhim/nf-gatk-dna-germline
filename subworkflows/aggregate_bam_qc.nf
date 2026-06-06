@@ -19,10 +19,10 @@ workflow AGGREGATE_BAM_QC {
     haplotype_database
     fingerprint_genotypes
     fingerprint_genotypes_index
+    collect_gc_bias_metrics
 
     main:
     genotype_lod_threshold = 5.0
-    collect_gc_bias_metrics = true
 
     COLLECT_READ_GROUP_BAM_METRICS(
         bam_ch,

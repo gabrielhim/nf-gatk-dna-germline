@@ -184,6 +184,39 @@ process COLLECT_QUALITY_YIELD_METRICS {
     """
 }
 
+process COLLECT_RAW_WGS_METRICS {
+
+    container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
+    memory 5000.MB
+
+    input:
+    path bam
+    path bam_index
+    path ref_fasta
+    path ref_fasta_index
+    path wgs_coverage_interval_list
+    val read_length
+    val output_prefix
+
+    output:
+    path "${output_prefix}.wgs_raw_metrics.txt", emit: wgs_raw_metrics
+
+    script:
+    def java_memory_size = task.memory.toMega() - 1000
+    """
+    java -Xms${java_memory_size}m -jar /usr/picard/picard.jar \
+        CollectRawWgsMetrics \
+        --INPUT ${bam} \
+        --VALIDATION_STRINGENCY SILENT \
+        --REFERENCE_SEQUENCE ${ref_fasta} \
+        --INCLUDE_BQ_HISTOGRAM true \
+        --INTERVALS ${wgs_coverage_interval_list} \
+        --OUTPUT ${output_prefix}.wgs_raw_metrics.txt \
+        --USE_FAST_ALGORITHM true \
+        --READ_LENGTH ${read_length}
+    """
+}
+
 process COLLECT_READ_GROUP_BAM_METRICS {
 
     container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
@@ -285,6 +318,38 @@ process COLLECT_VARIANT_CALLING_METRICS {
         --SEQUENCE_DICTIONARY ${ref_dict} \
         --TARGET_INTERVALS ${evaluation_interval_list} \
         --GVCF_INPUT ${is_gvcf}
+    """
+}
+
+process COLLECT_WGS_METRICS {
+
+    container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
+    memory 3000.MB
+
+    input:
+    path bam
+    path bam_index
+    path ref_fasta
+    path ref_fasta_index
+    path wgs_coverage_interval_list
+    val read_length
+    val output_prefix
+
+    output:
+    path "${output_prefix}.wgs_metrics.txt", emit: wgs_metrics
+
+    script:
+    """
+    java -Xms2000m -Xmx2500m -jar /usr/picard/picard.jar \
+        CollectWgsMetrics \
+        --INPUT ${bam} \
+        --VALIDATION_STRINGENCY SILENT \
+        --REFERENCE_SEQUENCE ${ref_fasta} \
+        --INCLUDE_BQ_HISTOGRAM true \
+        --INTERVALS ${wgs_coverage_interval_list} \
+        --OUTPUT ${output_prefix}.wgs_metrics.txt \
+        --USE_FAST_ALGORITHM true \
+        --READ_LENGTH ${read_length}
     """
 }
 
