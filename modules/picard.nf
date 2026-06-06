@@ -126,7 +126,41 @@ process COLLECT_AGGREGATION_METRICS {
         --METRIC_ACCUMULATION_LEVEL SAMPLE \
         --METRIC_ACCUMULATION_LEVEL LIBRARY
     """
+}
 
+process COLLECT_HS_METRICS {
+
+    container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
+    memory 7000.MB
+
+    input:
+    path bam
+    path bam_index
+    path ref_fasta
+    path ref_fasta_index
+    path target_interval_list
+    path bait_interval_list
+    val output_prefix
+
+    output:
+    path "${output_prefix}.hybrid_selection_metrics.txt", emit: hybrid_selection_metrics
+
+    script:
+    def java_initial_memory_mb = task.memory.toMega() - 1000
+    def java_max_memory_mb = task.memory.toMega() - 500
+    """
+    java -Xms${java_initial_memory_mb}m -Xmx${java_max_memory_mb}m -jar /usr/picard/picard.jar \
+        CollectHsMetrics \
+        --INPUT ${bam} \
+        --REFERENCE_SEQUENCE ${ref_fasta} \
+        --VALIDATION_STRINGENCY SILENT \
+        --TARGET_INTERVALS ${target_interval_list} \
+        --BAIT_INTERVALS ${bait_interval_list} \
+        --METRIC_ACCUMULATION_LEVEL null \
+        --METRIC_ACCUMULATION_LEVEL SAMPLE \
+        --METRIC_ACCUMULATION_LEVEL LIBRARY \
+        --OUTPUT ${output_prefix}.hybrid_selection_metrics.txt
+    """
 }
 
 process COLLECT_QUALITY_YIELD_METRICS {

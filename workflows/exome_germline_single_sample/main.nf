@@ -1,17 +1,17 @@
 #!/usr/bin/env nextflow
 
-include { SUBSET_CONTAMINATION_RESOURCES } from '../../modules/bedtools'
-
 include { AGGREGATE_BAM_QC } from '../../subworkflows/aggregate_bam_qc'
 include { BAM_TO_CRAM } from '../../subworkflows/bam_to_cram'
 include { UNMAPPED_BAM_TO_ALIGNED_BAM } from '../../subworkflows/unmapped_bam_to_aligned_bam'
 include { VARIANT_CALLING } from '../../subworkflows/variant_calling'
 
+include { SUBSET_CONTAMINATION_RESOURCES } from '../../modules/bedtools'
+include { COLLECT_HS_METRICS } from '../../modules/picard'
+
 workflow {
     
     main:
     unmapped_bams_ch = channel.fromPath(params.unmapped_bams).map { ubam -> [ubam, ubam.baseName] }
-    intervals_ch = channel.fromPath(params.target_interval_list)
 
     ref_fasta_file = file(params.ref_fasta)
     ref_fasta_index_file = file(params.ref_fasta_index)
@@ -43,9 +43,11 @@ workflow {
 
     calling_interval_list_file = file(params.calling_interval_list)
     evaluation_interval_list_file = file(params.evaluation_interval_list)
+    target_interval_list_file = file(params.target_interval_list)
+    bait_interval_list_file = file(params.bait_interval_list)
 
     subset_contamination_sites_ch = SUBSET_CONTAMINATION_RESOURCES(
-        intervals_ch,
+        target_interval_list_file,
         contamination_sites_ud_file,
         contamination_sites_bed_file,
         contamination_sites_mu_file,
@@ -123,6 +125,16 @@ workflow {
         params.use_dragen_hard_filtering,
     )
 
+    hs_metrics_ch = COLLECT_HS_METRICS(
+        alignment_ch.final_bam,
+        alignment_ch.final_bam_index,
+        ref_fasta_file,
+        ref_fasta_index_file,
+        target_interval_list_file,
+        bait_interval_list_file,
+        params.sample_name,
+    )
+
     publish:
     quality_yield_metrics = alignment_ch.quality_yield_metrics
 
@@ -181,6 +193,8 @@ workflow {
     bamout_index = variant_calling_ch.bamout_index
     vcf_summary_metrics = variant_calling_ch.vcf_summary_metrics
     vcf_detail_metrics = variant_calling_ch.vcf_detail_metrics
+
+    hybrid_selection_metrics = COLLECT_HS_METRICS.out.hybrid_selection_metrics
 }
 
 output {
@@ -320,6 +334,9 @@ output {
         path 'quality_control'
     }
     vcf_detail_metrics {
+        path 'quality_control'
+    }
+    hybrid_selection_metrics {
         path 'quality_control'
     }
 }
