@@ -113,7 +113,6 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
     if (haplotype_database) {
         CROSS_CHECK_FINGERPRINTS(
             sorted_bam_ch.sorted_bam,
-            sorted_bam_ch.sorted_bam_index,
             haplotype_database,
             lod_threshold,
             cross_check_fingerprints_by,
@@ -123,7 +122,6 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
 
     CHECK_CONTAMINATION(
         sorted_bam_ch.sorted_bam,
-        sorted_bam_ch.sorted_bam_index,
         target_contamination_sites_ud,
         target_contamination_sites_bed,
         target_contamination_sites_mu,
@@ -148,7 +146,6 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
 
         BASE_RECALIBRATOR(
             sorted_bam_ch.sorted_bam,
-            sorted_bam_ch.sorted_bam_index,
             dbsnp_vcf,
             dbsnp_vcf_index,
             known_indels_sites_vcfs,
@@ -164,7 +161,6 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
 
         APPLY_BQSR(
             sorted_bam_ch.sorted_bam,
-            sorted_bam_ch.sorted_bam_index,
             GATHER_BQSR_REPORTS.out.bqsr_report,
             ref_fasta,
             ref_fasta_index,
@@ -177,7 +173,7 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
         )
 
         GATHER_BAM_FILES(
-            APPLY_BQSR.out.recalibrated_bam.collect(), true, compression_level, sample_name
+            APPLY_BQSR.out.recal_bam.map {bam, _bam_index -> bam}.collect(), true, compression_level, sample_name
         )
     }
 
@@ -201,6 +197,5 @@ workflow UNMAPPED_BAM_TO_ALIGNED_BAM {
     duplication_metrics = MARK_DUPLICATES.out.duplication_metrics
     bqsr_report = perform_bqsr ? GATHER_BQSR_REPORTS.out.bqsr_report : []
 
-    final_bam = perform_bqsr ? GATHER_BAM_FILES.out.aggregated_bam : sorted_bam_ch.sorted_bam
-    final_bam_index = perform_bqsr ? GATHER_BAM_FILES.out.aggregated_bam_index : sorted_bam_ch.sorted_bam_index
+    final_bam = perform_bqsr ? GATHER_BAM_FILES.out.aggr_bam : sorted_bam_ch.sorted_bam
 }

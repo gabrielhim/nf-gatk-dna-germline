@@ -27,7 +27,9 @@ process DRAGMAP_AND_MERGE_ALIGNMENT {
     def dragmap_command_line = "dragen-os -b \$input_bam -r dragen_reference --interleaved=1 --preserve-map-align-order true"
     def hard_clip_reads_arg = hard_clip_reads ? "CLIP_OVERLAPPING_READS=true CLIP_OVERLAPPING_READS_OPERATOR=H'" : ""
     """
-   DRAGMAP_VERSION=\$(dragen-os --version)
+    set -euxo pipefail
+
+    DRAGMAP_VERSION=\$(dragen-os --version)
 
     if [ -z \${DRAGMAP_VERSION} ]; then
         exit 1;

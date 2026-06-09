@@ -6,8 +6,7 @@ process CALCULATE_READ_GROUP_CHECKSUM {
     memory 6000.MB
 
     input:
-    path bam
-    path bam_index
+    tuple path(bam), path(bam_index)
     val output_prefix
 
     output:
@@ -28,10 +27,8 @@ process CHECK_FINGERPRINT_TASK {
     memory 2500.MB
 
     input:
-    path bam
-    path bam_index
-    path vcf
-    path vcf_index
+    tuple path(bam), path(bam_index)
+    tuple path(vcf), path(vcf_index)
     path genotypes
     path genotypes_index
     path haplotype_database
@@ -84,8 +81,7 @@ process COLLECT_AGGREGATION_METRICS {
     memory 8000.MB
 
     input:
-    path bam
-    path bam_index
+    tuple path(bam), path(bam_index)
     path ref_fasta
     path ref_fasta_index
     path ref_dict
@@ -134,8 +130,7 @@ process COLLECT_HS_METRICS {
     memory 7000.MB
 
     input:
-    path bam
-    path bam_index
+    tuple path(bam), path(bam_index)
     path ref_fasta
     path ref_fasta_index
     path target_interval_list
@@ -190,8 +185,7 @@ process COLLECT_RAW_WGS_METRICS {
     memory 5000.MB
 
     input:
-    path bam
-    path bam_index
+    tuple path(bam), path(bam_index)
     path ref_fasta
     path ref_fasta_index
     path wgs_coverage_interval_list
@@ -223,8 +217,7 @@ process COLLECT_READ_GROUP_BAM_METRICS {
     memory 7000.MB
 
     input:
-    path bam
-    path bam_index
+    tuple path(bam), path(bam_index)
     path ref_fasta
     path ref_fasta_index
     path ref_dict
@@ -295,8 +288,7 @@ process COLLECT_VARIANT_CALLING_METRICS {
     memory 3000.MB
 
     input:
-    path vcf
-    path vcf_index
+    tuple path(vcf), path(vcf_index)
     path ref_dict
     path dbsnp_vcf
     path dbsnp_vcf_index
@@ -327,8 +319,7 @@ process COLLECT_WGS_METRICS {
     memory 3000.MB
 
     input:
-    path bam
-    path bam_index
+    tuple path(bam), path(bam_index)
     path ref_fasta
     path ref_fasta_index
     path wgs_coverage_interval_list
@@ -359,8 +350,7 @@ process CROSS_CHECK_FINGERPRINTS {
     memory 3500.MB
 
     input:
-    path bams
-    path bam_indices
+    tuple path(bams), path(bam_indices)
     path haplotype_database
     val lod_threshold
     val cross_check_by
@@ -397,9 +387,8 @@ process GATHER_BAM_FILES {
     val output_prefix
 
     output:
-    path "${output_prefix}.aggregated.bam", emit: aggregated_bam
-    path "${output_prefix}.aggregated.bai", emit: aggregated_bam_index, optional: true
-    path "${output_prefix}.aggregated.bam.md5", emit: aggregated_bam_md5, optional: true
+    tuple path("${output_prefix}.aggregated.bam"), path("${output_prefix}.aggregated.bai"), emit: aggr_bam, optional: true
+    path "${output_prefix}.aggregated.bam.md5", emit: aggr_bam_md5, optional: true
 
     script:
     def java_initial_memory_mb = task.memory.toMega() - 1000
@@ -468,8 +457,7 @@ process MERGE_VCFS {
     val output_filename
 
     output:
-    path output_filename, emit: merged_vcf
-    path "${output_filename}.tbi", emit: merged_vcf_index
+    tuple path(output_filename), path("${output_filename}.tbi"), emit: merged_vcf
 
     script:
     """
@@ -533,8 +521,7 @@ process SORT_SAM {
     val add_index_to_filename
 
     output:
-    path "${output_prefix}.sorted*.bam", emit: sorted_bam
-    path "${output_prefix}.sorted*.bai", emit: sorted_bam_index
+    tuple path("${output_prefix}.sorted*.bam"), path("${output_prefix}.sorted*.bai"), emit: sorted_bam
     path "${output_prefix}.sorted*.bam.md5", emit: sorted_bam_md5
 
     script:
@@ -560,18 +547,17 @@ process VALIDATE_SAM_FILE {
     memory 8000.MB
 
     input:
-    path sam
-    path sam_index
+    tuple path(sam), path(sam_index)
     path ref_fasta
     path ref_fasta_index
     path ref_dict
     val max_output
     val error_types_to_ignore
     val is_outlier_data
-    val output_filename
+    val output_prefix
 
     output:
-    path output_filename, emit: report
+    path "${output_prefix}.validation_report.txt", emit: report
 
     script:
     def max_output_arg = max_output ? "--MAX_OUTPUT ${max_output}" : ""
@@ -582,7 +568,7 @@ process VALIDATE_SAM_FILE {
     java -Xms${java_inital_memory_mb}m -Xmx${java_max_memory_mb}m -jar /usr/picard/picard.jar \
         ValidateSamFile \
         --INPUT ${sam} \
-        --OUTPUT ${output_filename} \
+        --OUTPUT ${output_prefix}.validation_report.txt \
         --REFERENCE_SEQUENCE ${ref_fasta} \
         ${max_output_arg} \
         ${error_types_to_ignore_arg} \

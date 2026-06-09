@@ -12,8 +12,7 @@ process CONVERT_TO_CRAM {
     val output_prefix
 
     output:
-    path "${output_prefix}.cram", emit: cram
-    path "${output_prefix}.cram.crai", emit: cram_index
+    tuple path("${output_prefix}.cram"), path("${output_prefix}.cram.crai"), emit: cram
     path "${output_prefix}.cram.md5", emit: cram_md5
 
     script:
@@ -45,8 +44,7 @@ process MERGE_BAMOUTS {
     val output_filename
 
     output:
-    path output_filename, emit: merged_bamout
-    path "${output_filename}.bai", emit: merged_bamout_index
+    tuple path(output_filename), path("${output_filename}.bai"), emit: merged_bamout
 
     script:
     """

@@ -6,8 +6,7 @@ process APPLY_BQSR {
     memory 3500.MB
 
     input:
-    path bam
-    path bam_index
+    tuple path(bam), path(bam_index)
     path recalibration_report
     path ref_fasta
     path ref_fasta_index
@@ -19,9 +18,8 @@ process APPLY_BQSR {
     val output_prefix
 
     output:
-    path "${output_prefix}.recalibrated.${task.index}.bam", emit: recalibrated_bam
-    path "${output_prefix}.recalibrated.${task.index}.bai", emit: recalibrated_bam_index
-    path "${output_prefix}.recalibrated.${task.index}.bam.md5", emit: recalibrated_bam_md5
+    tuple path("${output_prefix}.recalibrated.${task.index}.bam"), path("${output_prefix}.recalibrated.${task.index}.bai"), emit: recal_bam
+    path "${output_prefix}.recalibrated.${task.index}.bam.md5", emit: recal_bam_md5
 
     script:
     def bin_base_qualities_arg = bin_base_qualities ? "--static-quantized-quals 10 --static-quantized-quals 20 --static-quantized-quals 30" : ""
@@ -53,8 +51,7 @@ process BASE_RECALIBRATOR {
     memory 6000.MB
 
     input:
-    path bam
-    path bam_index
+    tuple path(bam), path(bam_index)
     path dbsnp_vcf
     path dbsnp_vcf_index
     path known_indels_sites_vcfs
@@ -94,8 +91,7 @@ process CALIBRATE_DRAGSTR_MODEL {
     cpus 4
 
     input:
-    path alignment
-    path alignment_index
+    tuple path(alignment), path(alignment_index)
     path ref_fasta
     path ref_fasta_index
     path ref_dict
@@ -124,13 +120,11 @@ process DRAGEN_HARD_FILTER_VCF {
     memory 3000.MB
 
     input:
-    path vcf
-    path vcf_index
+    tuple path(vcf), path(vcf_index)
     val output_filename
 
     output:
-    path output_filename, emit: filtered_vcf
-    path "${output_filename}.tbi", emit: filtered_vcf_index
+    tuple path(output_filename), path("${output_filename}.tbi"), emit: filtered_vcf
 
     script:
     """
@@ -153,7 +147,7 @@ process GATHER_BQSR_REPORTS {
     val output_prefix
 
     output:
-    path "${output_prefix}.recal_data.txt", emit: bqsr_report
+    path "${output_prefix}.recalibration_report.txt", emit: bqsr_report
 
     script:
     def inputs_arg = bqsr_reports.collect {report -> " --input ${report}"}.join(' ')
@@ -161,7 +155,7 @@ process GATHER_BQSR_REPORTS {
     gatk --java-options "-Xms3000m -Xmx3000m" \
         GatherBQSRReports \
         ${inputs_arg} \
-        --output ${output_prefix}.recal_data.txt
+        --output ${output_prefix}.recalibration_report.txt
     """
 }
 
@@ -171,9 +165,8 @@ process HAPLOTYPE_CALLER {
     memory 8000.MB
 
     input:
-    path(bam)
-    path(bam_index)
-    path(interval_list)
+    tuple path(bam), path(bam_index)
+    path interval_list
     path ref_fasta
     path ref_fasta_index
     path ref_dict
@@ -186,19 +179,18 @@ process HAPLOTYPE_CALLER {
     val output_prefix
 
     output:
-    path "*.vcf.gz", emit: vcf
-    path "*.vcf.gz.tbi", emit: vcf_index
-    path "*.bamout.bam", emit: bamout, optional: true
+    tuple path("${output_prefix}.haplotype_caller.*vcf.gz"), path("${output_prefix}.haplotype_caller.*vcf.gz.tbi"), emit: vcf
+    path "${output_prefix}.bamout.${task.index}.bam", emit: bamout, optional: true
 
     script:
-    def output_basename = "${output_prefix}.haplotype_caller.${task.index}"
+    def vcf_basename = "${output_prefix}.haplotype_caller.${task.index}"
     def vcf_suffix = make_gvcf ? "g.vcf.gz" : "vcf.gz"
     def dragen_mode_arg = run_dragen_mode_variant_calling ? "--dragen-mode" : ""
     def spanning_event_genotyping_arg = use_spanning_event_genotyping ? "" : "--disable-spanning-event-genotyping"
     def dragstr_model_arg = dragstr_model ? "--dragstr-params-path ${dragstr_model}" : ""
     def gvcf_gq_bands_arg = [10, 20, 30, 40, 50, 60, 70, 80, 90].collect {n -> "--gvcf-gq-bands ${n}"}.join(' ')
     def gvcf_arg = make_gvcf ? "--emit-ref-confidence GVCF --annotation-group AS_StandardAnnotation" : ""
-    def bamout_arg = make_bamout ? "--bam-output ${output_prefix}.bamout.bam" : ""
+    def bamout_arg = make_bamout ? "--bam-output ${output_prefix}.bamout.${task.index}.bam" : ""
     def java_memory_size_mb = task.memory.toMega() - 1000
     """
     gatk --java-options "-Xmx${java_memory_size_mb}m -Xms${java_memory_size_mb}m -XX:GCTimeLimit=50 -XX:GCHeapFreeLimit=10" \
@@ -206,7 +198,7 @@ process HAPLOTYPE_CALLER {
         --reference ${ref_fasta} \
         --input ${bam} \
         --intervals ${interval_list} \
-        --output ${output_basename}.${vcf_suffix} \
+        --output ${vcf_basename}.${vcf_suffix} \
         --contamination-fraction-to-filter ${contamination} \
         --annotation-group StandardAnnotation \
         --annotation-group StandardHCAnnotation \
@@ -225,8 +217,7 @@ process REBLOCK_GVCF {
     memory 3750.MB
 
     input:
-    path gvcf
-    path gvcf_index
+    tuple path(gvcf), path(gvcf_index)
     path ref_fasta
     path ref_fasta_index
     path ref_dict
@@ -235,8 +226,7 @@ process REBLOCK_GVCF {
     val output_prefix
 
     output:
-    path "${output_prefix}.reblocked.g.vcf.gz", emit: reblocked_gvcf
-    path "${output_prefix}.reblocked.g.vcf.gz.tbi", emit: reblocked_gvcf_index
+    tuple path("${output_prefix}.reblocked.g.vcf.gz"), path("${output_prefix}.reblocked.g.vcf.gz.tbi"), emit: reblocked_gvcf
 
     script:
     def tree_score_cutoff_arg = tree_score_cutoff ? "--tree-score-threshold-to-no-call ${tree_score_cutoff}" : ""
@@ -263,8 +253,7 @@ process VALIDATE_VCF {
     memory 7000.MB
 
     input:
-    path vcf
-    path vcf_index
+    tuple path(vcf), path(vcf_index)
     path ref_fasta
     path ref_fasta_index
     path ref_dict
@@ -272,11 +261,12 @@ process VALIDATE_VCF {
     path dbsnp_vcf_index
     path calling_interval_list
     val is_gvcf
-    val extra_args
+    val extra_parameters
 
     script:
     def dbsnp_arg = dbsnp_vcf ? "--dbsnp ${dbsnp_vcf}" : ""
     def gvcf_arg = is_gvcf ? "--validate-GVCF" : ""
+    def extra_parameters_arg = extra_parameters ? extra_parameters : ""
     def java_memory_mb = task.memory.toMega() - 2000
     """
     gatk --java-options "-Xms${java_memory_mb}m -Xmx${java_memory_mb}m" \
@@ -287,6 +277,6 @@ process VALIDATE_VCF {
         ${gvcf_arg} \
         --validation-type-to-exclude ALLELES \
         ${dbsnp_arg} \
-        ${extra_args}
+        ${extra_parameters_arg}
     """
 }

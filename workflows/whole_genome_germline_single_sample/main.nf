@@ -44,10 +44,14 @@ workflow {
     evaluation_interval_list_file = file(params.evaluation_interval_list)
     wgs_coverage_interval_list_file = file(params.wgs_coverage_interval_list)
 
-    lod_threshold = -20.0
-    cross_check_fingerprints_by = "READGROUP"
-    collect_gc_bias_metrics = true
-    read_length = 250
+    if (params.dragen_functional_equivalence_mode && params.dragen_maximum_quality_mode) {
+        error(
+            """
+            Both dragen_functional_equivalence_mode and dragen_maximum_quality_mode have been set to true, however, they are mutually exclusive.
+            You can set either of them to true, or set them both to false and adjust the arguments individually.
+            """.stripIndent()
+        )
+    }
 
     run_dragen_mode_variant_calling = params.dragen_functional_equivalence_mode || params.dragen_maximum_quality_mode ? true : params.run_dragen_mode_variant_calling
     use_spanning_event_genotyping = params.dragen_functional_equivalence_mode ? false : (params.dragen_maximum_quality_mode ? true : params.use_spanning_event_genotyping)
@@ -55,6 +59,11 @@ workflow {
     perform_bqsr = params.dragen_functional_equivalence_mode || params.dragen_maximum_quality_mode ? false : params.perform_bqsr
     use_bwa_mem = params.dragen_functional_equivalence_mode || params.dragen_maximum_quality_mode ? false : params.use_bwa_mem
     use_dragen_hard_filtering = params.dragen_functional_equivalence_mode || params.dragen_maximum_quality_mode ? true : params.use_dragen_hard_filtering
+
+    lod_threshold = -20.0
+    cross_check_fingerprints_by = "READGROUP"
+    collect_gc_bias_metrics = true
+    read_length = 250
 
     alignment_ch = UNMAPPED_BAM_TO_ALIGNED_BAM(
         params.sample_name,
@@ -89,10 +98,9 @@ workflow {
         cross_check_fingerprints_by,
     )
 
-    agg_bam_qc_ch = AGGREGATE_BAM_QC(
+    aggr_bam_qc_ch = AGGREGATE_BAM_QC(
         params.sample_name,
         alignment_ch.final_bam,
-        alignment_ch.final_bam_index,
         ref_fasta_file,
         ref_fasta_index_file,
         ref_dict_file,
@@ -109,12 +117,11 @@ workflow {
         ref_fasta_index_file,
         ref_dict_file,
         alignment_ch.duplication_metrics,
-        agg_bam_qc_ch.agg_alignment_summary_metrics,
+        aggr_bam_qc_ch.aggr_alignment_summary_metrics,
     )
 
     wgs_metrics_ch = COLLECT_WGS_METRICS(
         alignment_ch.final_bam,
-        alignment_ch.final_bam_index,
         ref_fasta_file,
         ref_fasta_index_file,
         wgs_coverage_interval_list_file,
@@ -124,7 +131,6 @@ workflow {
 
     wgs_raw_metrics_ch = COLLECT_RAW_WGS_METRICS(
         alignment_ch.final_bam,
-        alignment_ch.final_bam_index,
         ref_fasta_file,
         ref_fasta_index_file,
         wgs_coverage_interval_list_file,
@@ -135,7 +141,6 @@ workflow {
     variant_calling_ch = VARIANT_CALLING(
         params.sample_name,
         alignment_ch.final_bam,
-        alignment_ch.final_bam_index,
         calling_interval_list_file,
         evaluation_interval_list_file,
         ref_fasta_file,
@@ -175,45 +180,46 @@ workflow {
     duplication_metrics = alignment_ch.duplication_metrics
     bqsr_report = alignment_ch.bqsr_report
 
-    final_bam = alignment_ch.final_bam
-    final_bam_index = alignment_ch.final_bam_index
+    final_bam = alignment_ch.final_bam.map { bam, _bai -> bam }
+    final_bam_index = alignment_ch.final_bam.map { _bam, bai -> bai }
 
-    read_group_alignment_summary_metrics = agg_bam_qc_ch.read_group_alignment_summary_metrics
-    read_group_gc_bias_detail_metrics = agg_bam_qc_ch.read_group_gc_bias_detail_metrics
-    read_group_gc_bias_pdf = agg_bam_qc_ch.read_group_gc_bias_pdf
-    read_group_gc_bias_summary_metrics = agg_bam_qc_ch.read_group_gc_bias_summary_metrics
+    read_group_alignment_summary_metrics = aggr_bam_qc_ch.read_group_alignment_summary_metrics
+    read_group_gc_bias_detail_metrics = aggr_bam_qc_ch.read_group_gc_bias_detail_metrics
+    read_group_gc_bias_pdf = aggr_bam_qc_ch.read_group_gc_bias_pdf
+    read_group_gc_bias_summary_metrics = aggr_bam_qc_ch.read_group_gc_bias_summary_metrics
 
-    read_group_checksum = agg_bam_qc_ch.read_group_checksum
+    read_group_checksum = aggr_bam_qc_ch.read_group_checksum
 
-    agg_alignment_summary_metrics = agg_bam_qc_ch.agg_alignment_summary_metrics
-    agg_bait_bias_detail_metrics = agg_bam_qc_ch.agg_bait_bias_detail_metrics
-    agg_bait_bias_summary_metrics = agg_bam_qc_ch.agg_bait_bias_summary_metrics
-    agg_gc_bias_detail_metrics = agg_bam_qc_ch.agg_gc_bias_detail_metrics
-    agg_gc_bias_pdf = agg_bam_qc_ch.agg_gc_bias_pdf
-    agg_gc_bias_summary_metrics = agg_bam_qc_ch.agg_gc_bias_summary_metrics
-    agg_insert_size_histogram_pdf = agg_bam_qc_ch.agg_insert_size_histogram_pdf
-    agg_insert_size_metrics = agg_bam_qc_ch.agg_insert_size_metrics
-    agg_pre_adapter_detail_metrics = agg_bam_qc_ch.agg_pre_adapter_detail_metrics
-    agg_pre_adapter_summary_metrics = agg_bam_qc_ch.agg_pre_adapter_summary_metrics
-    agg_quality_distribution_pdf = agg_bam_qc_ch.agg_quality_distribution_pdf
-    agg_quality_distribution_metrics = agg_bam_qc_ch.agg_quality_distribution_metrics
-    agg_error_summary_metrics = agg_bam_qc_ch.agg_error_summary_metrics
+    aggr_alignment_summary_metrics = aggr_bam_qc_ch.aggr_alignment_summary_metrics
+    aggr_bait_bias_detail_metrics = aggr_bam_qc_ch.aggr_bait_bias_detail_metrics
+    aggr_bait_bias_summary_metrics = aggr_bam_qc_ch.aggr_bait_bias_summary_metrics
+    aggr_gc_bias_detail_metrics = aggr_bam_qc_ch.aggr_gc_bias_detail_metrics
+    aggr_gc_bias_pdf = aggr_bam_qc_ch.aggr_gc_bias_pdf
+    aggr_gc_bias_summary_metrics = aggr_bam_qc_ch.aggr_gc_bias_summary_metrics
+    aggr_insert_size_histogram_pdf = aggr_bam_qc_ch.aggr_insert_size_histogram_pdf
+    aggr_insert_size_metrics = aggr_bam_qc_ch.aggr_insert_size_metrics
+    aggr_pre_adapter_detail_metrics = aggr_bam_qc_ch.aggr_pre_adapter_detail_metrics
+    aggr_pre_adapter_summary_metrics = aggr_bam_qc_ch.aggr_pre_adapter_summary_metrics
+    aggr_quality_distribution_pdf = aggr_bam_qc_ch.aggr_quality_distribution_pdf
+    aggr_quality_distribution_metrics = aggr_bam_qc_ch.aggr_quality_distribution_metrics
+    aggr_error_summary_metrics = aggr_bam_qc_ch.aggr_error_summary_metrics
 
-    fingerprint_summary_metrics = agg_bam_qc_ch.fingerprint_summary_metrics
-    fingerprint_detail_metrics = agg_bam_qc_ch.fingerprint_detail_metrics
+    fingerprint_summary_metrics = aggr_bam_qc_ch.fingerprint_summary_metrics
+    fingerprint_detail_metrics = aggr_bam_qc_ch.fingerprint_detail_metrics
 
-    cram = bam_to_cram_ch.cram
-    cram_index = bam_to_cram_ch.cram_index
+    cram = bam_to_cram_ch.cram.map { cram, _cram_index -> cram }
+    cram_index = bam_to_cram_ch.cram.map { _cram, cram_index -> cram_index }
     cram_md5 = bam_to_cram_ch.cram_md5
     cram_validation_report = bam_to_cram_ch.validation_report
 
     wgs_metrics = wgs_metrics_ch.wgs_metrics
     wgs_raw_metrics = wgs_raw_metrics_ch.wgs_raw_metrics
 
-    final_vcf = variant_calling_ch.final_vcf
-    final_vcf_index = variant_calling_ch.final_vcf_index
-    bamout = variant_calling_ch.bamout
-    bamout_index = variant_calling_ch.bamout_index
+    final_vcf = variant_calling_ch.final_vcf.map { vcf, _vcf_index -> vcf }
+    final_vcf_index = variant_calling_ch.final_vcf.map { _vcf, vcf_index -> vcf_index }
+    bamout = variant_calling_ch.bamout.map { bam, _bam_index -> bam }
+    bamout_index = variant_calling_ch.bamout.map { _bam, bam_index -> bam_index }
+
     vcf_summary_metrics = variant_calling_ch.vcf_summary_metrics
     vcf_detail_metrics = variant_calling_ch.vcf_detail_metrics
 }
@@ -282,43 +288,43 @@ output {
     read_group_checksum {
         path 'quality_control'
     }
-    agg_alignment_summary_metrics {
+    aggr_alignment_summary_metrics {
         path 'quality_control'
     }
-    agg_bait_bias_detail_metrics {
+    aggr_bait_bias_detail_metrics {
         path 'quality_control'
     }
-    agg_bait_bias_summary_metrics {
+    aggr_bait_bias_summary_metrics {
         path 'quality_control'
     }
-    agg_gc_bias_detail_metrics {
+    aggr_gc_bias_detail_metrics {
         path 'quality_control'
     }
-    agg_gc_bias_pdf {
+    aggr_gc_bias_pdf {
         path 'quality_control'
     }
-    agg_gc_bias_summary_metrics {
+    aggr_gc_bias_summary_metrics {
         path 'quality_control'
     }
-    agg_insert_size_histogram_pdf {
+    aggr_insert_size_histogram_pdf {
         path 'quality_control'
     }
-    agg_insert_size_metrics {
+    aggr_insert_size_metrics {
         path 'quality_control'
     }
-    agg_pre_adapter_detail_metrics {
+    aggr_pre_adapter_detail_metrics {
         path 'quality_control'
     }
-    agg_pre_adapter_summary_metrics {
+    aggr_pre_adapter_summary_metrics {
         path 'quality_control'
     }
-    agg_quality_distribution_pdf {
+    aggr_quality_distribution_pdf {
         path 'quality_control'
     }
-    agg_quality_distribution_metrics {
+    aggr_quality_distribution_metrics {
         path 'quality_control'
     }
-    agg_error_summary_metrics {
+    aggr_error_summary_metrics {
         path 'quality_control'
     }
     fingerprint_summary_metrics {

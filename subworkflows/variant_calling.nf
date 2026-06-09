@@ -20,7 +20,6 @@ workflow VARIANT_CALLING {
     take:
     sample_name
     bam_ch
-    bam_index_ch
     calling_interval_list
     evaluation_interval_list
     ref_fasta
@@ -45,7 +44,7 @@ workflow VARIANT_CALLING {
     main:
     if (run_dragen_mode_variant_calling) {
         CALIBRATE_DRAGSTR_MODEL(
-            bam_ch, bam_index_ch, ref_fasta, ref_fasta_index, ref_dict, ref_str, sample_name
+            bam_ch, ref_fasta, ref_fasta_index, ref_dict, ref_str, sample_name
         )
     }
 
@@ -55,7 +54,6 @@ workflow VARIANT_CALLING {
 
     haplotype_caller_ch = HAPLOTYPE_CALLER(
         bam_ch,
-        bam_index_ch,
         SCATTER_INTERVAL_LIST.out.scattered_interval_lists.flatten(),
         ref_fasta,
         ref_fasta_index,
@@ -70,8 +68,8 @@ workflow VARIANT_CALLING {
     )
 
     merged_vcf_ch = MERGE_VCFS(
-        haplotype_caller_ch.vcf.collect(),
-        haplotype_caller_ch.vcf_index.collect(),
+        haplotype_caller_ch.vcf.map { vcf, _tbi -> vcf }. collect(),
+        haplotype_caller_ch.vcf.map { _vcf, tbi -> tbi }. collect(),
         make_gvcf ? "${sample_name}.haplotype_caller.g.vcf.gz" : "${sample_name}.haplotype_caller.vcf.gz",
     )
 
@@ -84,19 +82,16 @@ workflow VARIANT_CALLING {
     if (use_dragen_hard_filtering) {
         DRAGEN_HARD_FILTER_VCF(
             merged_vcf_ch.merged_vcf,
-            merged_vcf_ch.merged_vcf_index,
             make_gvcf ? "${sample_name}.hard-filtered.g.vcf.gz" : "${sample_name}.hard-filtered.vcf.gz",
         )
     }
 
     merged_filt_vcf_ch = use_dragen_hard_filtering ? DRAGEN_HARD_FILTER_VCF.out.filtered_vcf : merged_vcf_ch.merged_vcf
-    merged_filt_vcf_index_ch = use_dragen_hard_filtering ? DRAGEN_HARD_FILTER_VCF.out.filtered_vcf_index : merged_vcf_ch.merged_vcf_index
 
     run_reblock = make_gvcf && !skip_reblocking
     if (run_reblock) {
         REBLOCK_GVCF(
             merged_filt_vcf_ch,
-            merged_filt_vcf_index_ch,
             ref_fasta,
             ref_fasta_index,
             ref_dict,
@@ -106,12 +101,10 @@ workflow VARIANT_CALLING {
         )
     }
 
-    final_vcf = run_reblock ? REBLOCK_GVCF.out.reblocked_gvcf : merged_filt_vcf_ch
-    final_vcf_index = run_reblock ? REBLOCK_GVCF.out.reblocked_gvcf_index : merged_filt_vcf_index_ch
+    final_vcf_ch = run_reblock ? REBLOCK_GVCF.out.reblocked_gvcf : merged_filt_vcf_ch
 
     VALIDATE_VCF(
-        final_vcf,
-        final_vcf_index,
+        final_vcf_ch,
         ref_fasta,
         ref_fasta_index,
         ref_dict,
@@ -123,8 +116,7 @@ workflow VARIANT_CALLING {
     )
 
     COLLECT_VARIANT_CALLING_METRICS(
-        final_vcf,
-        final_vcf_index,
+        final_vcf_ch,
         ref_dict,
         dbsnp_vcf,
         dbsnp_vcf_index,
@@ -134,10 +126,9 @@ workflow VARIANT_CALLING {
     )
 
     emit:
-    final_vcf = final_vcf
-    final_vcf_index = final_vcf_index
-    bamout = make_bamout ? MERGE_BAMOUTS.out.merged_bamout : []
-    bamout_index = make_bamout ? MERGE_BAMOUTS.out.merged_bamout_index : []
+    final_vcf = final_vcf_ch
+    bamout = make_bamout ? MERGE_BAMOUTS.out.merged_bamout : channel.empty()
+
     vcf_summary_metrics = COLLECT_VARIANT_CALLING_METRICS.out.variant_calling_summary_metrics
     vcf_detail_metrics = COLLECT_VARIANT_CALLING_METRICS.out.variant_calling_detail_metrics
 }
