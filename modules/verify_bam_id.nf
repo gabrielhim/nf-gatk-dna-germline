@@ -6,8 +6,7 @@ process CHECK_CONTAMINATION {
     memory '7.5 GB'
 
     input:
-    path bam
-    path bam_index
+    tuple path(bam), path(bam_inded)
     path contamination_sites_ud
     path contamination_sites_bed
     path contamination_sites_mu

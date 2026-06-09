@@ -27,23 +27,21 @@ workflow BAM_TO_CRAM {
         max_chimerism_in_reasonable_sample,
     )
 
-    is_outlier_data = CHECK_PRE_VALIDATION.out.is_outlier_data.text.trim().toBoolean()
+    is_outlier_data = CHECK_PRE_VALIDATION.out.is_outlier_data.map { f -> file(f).text.trim().toBoolean() }.first()
 
     VALIDATE_SAM_FILE(
         cram_ch.cram,
-        cram_ch.cram_index,
         ref_fasta,
         ref_fasta_index,
         ref_dict,
         1000000000,
         ["MISSING_TAG_NM"],
         is_outlier_data,
-        "${sample_name}.cram.validation_report.txt",
+        "${sample_name}.cram",
     )
 
     emit:
     cram = cram_ch.cram
-    cram_index = cram_ch.cram_index
     cram_md5 = cram_ch.cram_md5
     validation_report = VALIDATE_SAM_FILE.out.report
 }
