@@ -16,6 +16,6 @@
 .nextflow*
 results
 work
-data
+data/*/
 training
 results_gatk*
