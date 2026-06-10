@@ -2,7 +2,7 @@
 
 include { 
     CALCULATE_READ_GROUP_CHECKSUM;
-    CHECK_FINGERPRINT_TASK;
+    CHECK_FINGERPRINT;
     COLLECT_AGGREGATION_METRICS;
     COLLECT_READ_GROUP_BAM_METRICS;
 } from '../modules/picard'
@@ -38,7 +38,7 @@ workflow AGGREGATE_BAM_QC {
 
     check_fingerprint = haplotype_database && fingerprint_genotypes
     if (check_fingerprint) {
-        CHECK_FINGERPRINT_TASK(
+        CHECK_FINGERPRINT(
             bam_ch,
             channel.empty(),
             fingerprint_genotypes,
@@ -78,6 +78,6 @@ workflow AGGREGATE_BAM_QC {
     aggr_quality_distribution_metrics = COLLECT_AGGREGATION_METRICS.out.quality_distribution_metrics
     aggr_error_summary_metrics = COLLECT_AGGREGATION_METRICS.out.error_summary_metrics
 
-    fingerprint_summary_metrics = check_fingerprint ? CHECK_FINGERPRINT_TASK.out.summary_metrics : []
-    fingerprint_detail_metrics = check_fingerprint ? CHECK_FINGERPRINT_TASK.out.detail_metrics : []
+    fingerprint_summary_metrics = check_fingerprint ? CHECK_FINGERPRINT.out.summary_metrics : []
+    fingerprint_detail_metrics = check_fingerprint ? CHECK_FINGERPRINT.out.detail_metrics : []
 }

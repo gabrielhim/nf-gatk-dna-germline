@@ -1,6 +1,6 @@
 # DNA-Seq Germline Workflows in Nextflow
 
-DNA-Seq Germline pipelines from Broad Institute's WARP project rewritten in Nextflow. All workflows implement the GATK Best Practices for variant analysis in Next-Generation Sequencing data.
+DNA-Seq Germline workflows from Broad Institute's WARP project rewritten in Nextflow. All of them implement GATK Best Practices for variant analysis in Next-Generation Sequencing data.
 
 The WARP workflows included in this project are:
 * **Exome Germline Single Sample**: performs read mapping, germline small variants calling and quality check in human exome sequencing data;
