@@ -21,7 +21,7 @@ process CALCULATE_READ_GROUP_CHECKSUM {
     """
 }
 
-process CHECK_FINGERPRINT_TASK {
+process CHECK_FINGERPRINT {
 
     container 'us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10'
     memory 2500.MB
